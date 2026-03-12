@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">Treasure</string>
+    <string name="demo_desc"> You are Geralt of Rivia, mercenary monster slayer.\nBefore you stands a war-torn, monster-infested continent you can explore at will.\nYour current contract? Tracking down Ciri — the Child of Prophecy,\na living weapon that can alter the shape of the world.</string>
+    <string name="details_title">Details</string>
+    <string name="genre_label">Genre:</string>
+    <string name="developer_label">Developer:</string>
+    <string name="publisher_label">Publisher:</string>
+    <string name="franchise_label">Franchise:</string>
+    <string name="release_date_label">Release Date:</string>
+    <string name="age_rating_label">Age Rating:</string>
+    <string name="reviews_label">Reviews:</string>
+    <string name="description_label">Description</string>
+    <string name="read_more">Read More</string>
+    <string name="read_less">Read Less</string>
+    <string name="system_requirements">System Requirements</string>
+    <string name="minimum">Minimum</string>
+    <string name="recommended">Recommended</string>
+    <string name="os_label">OS:</string>
+    <string name="processor_label">Processor:</string>
+    <string name="memory_label">Memory:</string>
+    <string name="graphics_label">Graphics:</string>
+    <string name="storage_label">Storage:</string>
+    <string name="additional_notes_label">Additional Notes:</string>
+    <string name="steam_label">Steam</string>
+    <string name="gog_label">GOG</string>
+    <string name="epic_games_label">Epic Games</string>
+</resources>

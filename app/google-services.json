@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "879288842002",
+    "project_id": "treasure-7df7e",
+    "storage_bucket": "treasure-7df7e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:879288842002:android:d18f89d33199e09aa825cb",
+        "android_client_info": {
+          "package_name": "com.example.treasure"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBY5AKlPcxifIF8aMKX0_-sBB5WZDUWg0E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
