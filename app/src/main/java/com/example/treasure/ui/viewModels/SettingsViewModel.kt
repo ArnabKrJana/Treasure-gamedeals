@@ -3,6 +3,7 @@ package com.example.treasure.ui.viewModels
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -36,7 +37,6 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    // Combine all flows into a single UI State
     val uiState: StateFlow<SettingsUiState> = combine(
         repository.appTheme,
         repository.isDynamicColorEnabled,
@@ -60,7 +60,7 @@ class SettingsViewModel @Inject constructor(
         repository.setNotificationsEnabled(enabled)
     }
 
-    // UPDATED: Saves setting AND reschedules worker
+
     fun updateSyncFrequency(hours: Int) = viewModelScope.launch {
         // 1. Save to Preferences
         repository.setSyncFrequency(hours)
@@ -70,10 +70,17 @@ class SettingsViewModel @Inject constructor(
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
+            .setRequiresDeviceIdle(true)
             .build()
 
         val workRequest = PeriodicWorkRequestBuilder<PriceSyncWorker>(hours.toLong(), TimeUnit.HOURS)
             .setConstraints(constraints)
+            .setBackoffCriteria(
+                BackoffPolicy.EXPONENTIAL,
+                15,
+                TimeUnit.MINUTES
+            )
             .build()
 
         // "UPDATE" policy keeps the worker unique but replaces the spec

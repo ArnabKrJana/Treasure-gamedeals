@@ -1,6 +1,5 @@
 *.iml
 .gradle
-/local.properties
 /.idea/caches
 /.idea/libraries
 /.idea/modules.xml
@@ -15,3 +14,4 @@
 *.apk
 local.properties
 all_android_code.txt
+extract_code.py

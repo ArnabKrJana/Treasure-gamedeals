@@ -4,7 +4,9 @@ import android.app.Application
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.lifecycle.asFlow
+import androidx.work.BackoffPolicy
 import androidx.work.Configuration
+import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
@@ -28,11 +30,8 @@ import javax.inject.Inject
 @HiltAndroidApp
 class MyApplication: Application(), Configuration.Provider{
     @Inject lateinit var tokenManager: TokenManager
-
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
-
-    // Inject repository to read saved frequency
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
@@ -42,21 +41,18 @@ class MyApplication: Application(), Configuration.Provider{
     override fun onCreate() {
         super.onCreate()
 
-        // 1. Initialize Remote Config
         val remoteConfig = FirebaseRemoteConfig.getInstance()
         val configSettings = remoteConfigSettings {
-            minimumFetchIntervalInSeconds = 0 // Fetch once per hour
+            minimumFetchIntervalInSeconds = 0
         }
         remoteConfig.setConfigSettingsAsync(configSettings)
 
-        // 2. Fetch and Activate
         remoteConfig.fetchAndActivate()
             .addOnCompleteListener { task ->
                 if (task.isSuccessful) {
                     val updated = task.result
                     Log.d("RemoteConfig", "Config params updated: $updated")
 
-                    // 3. Get Key and Save Securely
                     val apiKey = remoteConfig.getString("itad_api_key")
 
                     if (apiKey.isNotBlank()) {
@@ -65,7 +61,6 @@ class MyApplication: Application(), Configuration.Provider{
                     }
                 } else {
                     Log.e("RemoteConfig", "Fetch failed")
-                    // Fallback: Use local backup if needed, or handle error
                 }
             }
 
@@ -74,22 +69,28 @@ class MyApplication: Application(), Configuration.Provider{
     }
 
     private fun setupPeriodicWork() {
-        // Use IO Dispatcher to read from DataStore without blocking Main Thread
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .setRequiresBatteryNotLow(true)
+            .setRequiresDeviceIdle(true)
+            .build()
+
         CoroutineScope(Dispatchers.IO).launch {
-            // Fetch saved frequency, default is 8 if not set
             val savedFrequency = settingsRepository.syncFrequency.first()
+            Log.d("PeriodicWork", "Frequency: $savedFrequency")
 
             val workRequest = PeriodicWorkRequestBuilder<PriceSyncWorker>(savedFrequency.toLong(), TimeUnit.HOURS)
-                .setConstraints(
-                    androidx.work.Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build()
+                .setConstraints(constraints)
+                .setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL,
+                    15,
+                    TimeUnit.MINUTES
                 )
                 .build()
 
             WorkManager.getInstance(this@MyApplication).enqueueUniquePeriodicWork(
                 "PriceSyncWork",
-                ExistingPeriodicWorkPolicy.UPDATE, // UPDATE policy ensures if logic changes, worker is updated
+                ExistingPeriodicWorkPolicy.UPDATE,
                 workRequest
             )
         }

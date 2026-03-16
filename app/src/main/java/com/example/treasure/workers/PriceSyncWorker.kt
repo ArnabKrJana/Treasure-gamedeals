@@ -10,12 +10,15 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import androidx.hilt.work.HiltWorker
+import androidx.room.withTransaction
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.treasure.R
 import com.example.treasure.data.local.TreasureDatabase
 import com.example.treasure.data.local.entity.NotificationEntity
+import com.example.treasure.data.local.entity.UserInteractionEntity
 import com.example.treasure.data.remote.apiService.ItadApi
+import com.example.treasure.data.remote.networkDto.itad.ItadOverviewPriceDto
 import com.example.treasure.data.repositoryImpl.SettingsRepository
 import com.example.treasure.utils.Constants
 import dagger.assisted.Assisted
@@ -31,31 +34,22 @@ class PriceSyncWorker @AssistedInject constructor(
     @Assisted workerParams: WorkerParameters,
     private val database: TreasureDatabase,
     private val itadApi: ItadApi,
-    private val settingsRepository: SettingsRepository // 1. Injected Repository
+    private val settingsRepository: SettingsRepository
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        // Switch to demoWorkDefinition() here for testing if needed
         return workDefinition()
     }
 
-    /**
-     * ACTUAL PRODUCTION LOGIC
-     * Notifies based on user settings
-     */
     private suspend fun workDefinition(): Result = withContext(Dispatchers.IO) {
         Log.d("PriceSyncWorker", "Work started - checking for price updates")
 
-        // 2. CHECK SETTINGS: Are notifications enabled?
-        // We use .first() to get the current snapshot of the setting
         val areNotificationsEnabled = settingsRepository.areNotificationsEnabled.first()
         if (!areNotificationsEnabled) {
             Log.d("PriceSyncWorker", "Notifications disabled by user. Skipping work.")
             return@withContext Result.success()
         }
 
-        // 3. GET DYNAMIC THRESHOLD
-        // Convert integer (e.g., 5) to decimal (0.05)
         val thresholdPercent = settingsRepository.notifyThreshold.first()
         val thresholdDecimal = thresholdPercent / 100.0
 
@@ -66,28 +60,44 @@ class PriceSyncWorker @AssistedInject constructor(
                 return@withContext Result.success()
             }
 
+            // 1. Chunking to prevent API URL Too Long errors
             val gameIds = wishlistItems.map { it.gameId }
-            val response = itadApi.getPriceOverview(
-                country = "IN",
-                shops = "61,35,16",
-                gameIds = gameIds
-            )
+            val chunkedGameIds = gameIds.chunked(40)
+            val allPrices = mutableMapOf<String, ItadOverviewPriceDto>()
 
-            if (!response.isSuccessful || response.body() == null) {
-                Log.e("PriceSyncWorker", "API request failed: ${response.code()}")
-                return@withContext Result.retry()
+            for (chunk in chunkedGameIds) {
+                val response = itadApi.getPriceOverview(
+                    country = "IN",
+                    shops = "61,35,16",
+                    gameIds = chunk
+                )
+
+                if (response.isSuccessful && response.body() != null) {
+                    val priceMap = response.body()!!.prices.associateBy { it.id }
+                    allPrices.putAll(priceMap)
+                } else {
+                    val code = response.code()
+                    Log.e("PriceSyncWorker", "Failed to fetch chunk: $code")
+
+
+                    if (code in 500..599 || code == 429) {
+                        return@withContext Result.retry() // Server error or Rate Limited -> Retry
+                    }
+                    // Else: 4xx Client Error, just continue to next chunk
+                }
             }
 
-            val priceMap = response.body()!!.prices.associateBy { it.id }
             val changedGames = mutableListOf<NotificationEntity>()
+            val updatedInteractions = mutableListOf<UserInteractionEntity>()
 
             wishlistItems.forEach { localItem ->
-                val remoteItem = priceMap[localItem.gameId]
+                val remoteItem = allPrices[localItem.gameId]
                 val newPrice = remoteItem?.current?.price?.amount
 
                 if (newPrice != null) {
+                    // Collect items that need DB updates instead of saving immediately
                     if (localItem.latestSyncedPrice != newPrice) {
-                        database.userInteractionDao().insertInteraction(
+                        updatedInteractions.add(
                             localItem.copy(
                                 latestSyncedPrice = newPrice,
                                 lastSyncTimestamp = System.currentTimeMillis()
@@ -100,8 +110,6 @@ class PriceSyncWorker @AssistedInject constructor(
                         val diff = newPrice - snapshotPrice
                         val changePercent = diff / snapshotPrice
 
-                        // 4. USE DYNAMIC THRESHOLD in logic
-                        // We check if the absolute change is greater than user setting
                         if (abs(changePercent) > thresholdDecimal) {
                             changedGames.add(
                                 NotificationEntity(
@@ -113,6 +121,15 @@ class PriceSyncWorker @AssistedInject constructor(
                                 )
                             )
                         }
+                    }
+                }
+            }
+
+            // 3. Database Transaction Batching (Atomic & Fast)
+            if (updatedInteractions.isNotEmpty()) {
+                database.withTransaction {
+                    updatedInteractions.forEach { interaction ->
+                        database.userInteractionDao().insertInteraction(interaction)
                     }
                 }
             }
@@ -194,8 +211,10 @@ class PriceSyncWorker @AssistedInject constructor(
 
     private suspend fun processNotifications(changedGames: List<NotificationEntity>) {
         if (changedGames.isNotEmpty()) {
-            changedGames.forEach {
-                database.notificationDao().insertNotification(it)
+            database.withTransaction {
+                changedGames.forEach {
+                    database.notificationDao().insertNotification(it)
+                }
             }
 
             if (changedGames.size == 1) {
