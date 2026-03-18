@@ -60,7 +60,7 @@ class PriceSyncWorker @AssistedInject constructor(
                 return@withContext Result.success()
             }
 
-            // 1. Chunking to prevent API URL Too Long errors
+
             val gameIds = wishlistItems.map { it.gameId }
             val chunkedGameIds = gameIds.chunked(40)
             val allPrices = mutableMapOf<String, ItadOverviewPriceDto>()
@@ -81,9 +81,9 @@ class PriceSyncWorker @AssistedInject constructor(
 
 
                     if (code in 500..599 || code == 429) {
-                        return@withContext Result.retry() // Server error or Rate Limited -> Retry
+                        return@withContext Result.retry() 
                     }
-                    // Else: 4xx Client Error, just continue to next chunk
+
                 }
             }
 

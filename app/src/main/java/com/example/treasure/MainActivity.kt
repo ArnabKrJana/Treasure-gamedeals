@@ -12,7 +12,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -29,6 +31,8 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
+import android.graphics.Color
+import androidx.activity.SystemBarStyle
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -37,7 +41,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
+        )
         setContent {
             // 2. Observe the Settings
             val theme by settingsRepository.appTheme.collectAsStateWithLifecycle(initialValue = AppTheme.SYSTEM)
@@ -57,13 +64,12 @@ class MainActivity : ComponentActivity() {
             ) {
                 val context = LocalContext.current
 
-                // --- PERMISSION LOGIC START ---
+
                 val launcher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestPermission(),
                     onResult = { isGranted ->
                         Log.d("MainActivity", "Permission Result: $isGranted")
-                        // No specific action needed here as HomeScreen handles its own retries/loading,
-                        // but completing the dialog allows the UI to resume properly.
+
                     }
                 )
 
@@ -78,11 +84,10 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                // --- PERMISSION LOGIC END ---
-
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    // Pass innerPadding to avoid content overlapping with system bars if needed,
-                    // or just use your existing graph logic.
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
                     RootNavigationGraph(rootNavController = rememberNavController())
                 }
             }

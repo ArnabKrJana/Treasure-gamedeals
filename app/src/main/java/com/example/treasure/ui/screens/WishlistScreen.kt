@@ -48,6 +48,7 @@ fun WishlistScreenContent(
 
     val gridState = rememberLazyGridState()
 
+
     if (wishlistItems.isEmpty()) {
 
         Box(
@@ -82,15 +83,13 @@ fun WishlistScreenContent(
                 modifier = Modifier.fillMaxSize(),
 
                 contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = 16.dp,
-                    bottom = 24.dp
+                  16.dp,
                 ),
 
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
 
                 verticalArrangement = Arrangement.spacedBy(12.dp)
+
 
             ) {
 
@@ -101,9 +100,9 @@ fun WishlistScreenContent(
 
                     GameCard(
 
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(0.68f),
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .aspectRatio(0.68f),
 
                         game = entity.toGameCardItem(),
 

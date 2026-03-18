@@ -2,16 +2,15 @@ package com.example.treasure.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -34,7 +33,6 @@ import androidx.compose.material3.SearchBar
 import androidx.compose.material3.SearchBarDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +54,7 @@ import coil3.compose.AsyncImage
 import com.example.treasure.domain.uiModels.GameCardItem
 import com.example.treasure.domain.uiModels.Price
 import com.example.treasure.domain.uiModels.UpVotes
+import com.example.treasure.ui.theme.LocalThemeIsDark
 import com.example.treasure.ui.viewModels.SearchViewModel
 import com.example.treasure.utils.ColorCode
 
@@ -97,6 +96,7 @@ fun SearchScreenContent(
 
     Scaffold(
         modifier = modifier,
+        contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             SearchBar(
                 query = searchQuery,
@@ -188,7 +188,9 @@ fun SearchGameCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    // FIX: Read from the App's Theme state, NOT the System's state
+    val isDark = LocalThemeIsDark.current
+
     Card(
         modifier = modifier
             .fillMaxWidth()

@@ -71,7 +71,6 @@ class SettingsViewModel @Inject constructor(
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .setRequiresBatteryNotLow(true)
-            .setRequiresDeviceIdle(true)
             .build()
 
         val workRequest = PeriodicWorkRequestBuilder<PriceSyncWorker>(hours.toLong(), TimeUnit.HOURS)

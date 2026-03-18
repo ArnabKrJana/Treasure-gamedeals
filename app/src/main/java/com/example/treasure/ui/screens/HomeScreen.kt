@@ -4,10 +4,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -76,7 +79,6 @@ fun HomeScreenContent(
     onCardClick: (String) -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
-
     // Monitor errors for both lists
     val hotError = hotDeals.loadState.refresh as? LoadState.Error
     val lowestError = lowestPriceDeals.loadState.refresh as? LoadState.Error
@@ -98,13 +100,14 @@ fun HomeScreenContent(
     val mainListState = rememberSaveable(key = "home_vertical", saver = LazyListState.Saver) {
         LazyListState()
     }
-
+    val bottomPadding = 80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Box(modifier = modifier.fillMaxSize()) {
+
         LazyColumn(
             state = mainListState,
             modifier = Modifier
-                .fillMaxSize()
-                .padding(vertical = 16.dp)
+                .fillMaxSize(),
+                    contentPadding =PaddingValues(top = 16.dp, bottom = bottomPadding)
         ) {
             item(key = "header_hot") {
                 SectionHeader(title = "Hot Deals", subtitle = "Trending right now")

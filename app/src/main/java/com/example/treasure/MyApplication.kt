@@ -72,7 +72,6 @@ class MyApplication: Application(), Configuration.Provider{
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .setRequiresBatteryNotLow(true)
-            .setRequiresDeviceIdle(true)
             .build()
 
         CoroutineScope(Dispatchers.IO).launch {

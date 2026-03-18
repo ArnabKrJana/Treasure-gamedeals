@@ -5,7 +5,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,6 +29,7 @@ import coil3.compose.AsyncImage
 import com.example.treasure.domain.uiModels.GameCardItem
 import com.example.treasure.domain.uiModels.Price
 import com.example.treasure.domain.uiModels.UpVotes
+import com.example.treasure.ui.theme.LocalThemeIsDark
 import com.example.treasure.utils.ColorCode
 import com.example.treasure.utils.helper.getDynamicColor
 
@@ -52,7 +52,8 @@ fun GameCard(
         label = "Color Fade"
     )
 
-    val isDark = isSystemInDarkTheme()
+    // FIX: Read from the App's Theme state, NOT the System's state
+    val isDark = LocalThemeIsDark.current
     val context = LocalContext.current
 
     val gradientBrush = Brush.verticalGradient(

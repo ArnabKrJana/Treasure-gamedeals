@@ -121,7 +121,7 @@ fun MainScreenComposable(
         NavHost(
             navController = bottomNavController,
             startDestination = NestedGraphDestination.HomeGraph,
-            modifier = Modifier.padding(innerPadding),
+          modifier = Modifier.padding(innerPadding),
 
             enterTransition = { fadeIn(tween(220)) },
             exitTransition = { fadeOut(tween(220)) },
