@@ -125,7 +125,7 @@ class PriceSyncWorker @AssistedInject constructor(
                 }
             }
 
-            // 3. Database Transaction Batching (Atomic & Fast)
+            
             if (updatedInteractions.isNotEmpty()) {
                 database.withTransaction {
                     updatedInteractions.forEach { interaction ->

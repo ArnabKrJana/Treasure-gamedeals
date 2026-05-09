@@ -8,6 +8,12 @@
       <SelectionState runConfigName="NotificationScreenPreview">
         <option name="selectionMode" value="DROPDOWN" />
       </SelectionState>
+      <SelectionState runConfigName="Dark Theme - PreviewDarkTreasureUpcomingCarousel">
+        <option name="selectionMode" value="DROPDOWN" />
+      </SelectionState>
+      <SelectionState runConfigName="Light Theme - PreviewLightTreasureUpcomingCarousel">
+        <option name="selectionMode" value="DROPDOWN" />
+      </SelectionState>
     </selectionStates>
   </component>
 </project>
