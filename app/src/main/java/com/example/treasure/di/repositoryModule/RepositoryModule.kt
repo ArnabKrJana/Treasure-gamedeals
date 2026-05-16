@@ -1,6 +1,8 @@
 package com.example.treasure.di.repositoryModule
 
+import com.example.treasure.data.repositoryImpl.AuthRepositoryImpl
 import com.example.treasure.data.repositoryImpl.GameRepositoryImpl
+import com.example.treasure.domain.repository.AuthRepository
 import com.example.treasure.domain.repository.GameRepository
 import dagger.Binds
 import dagger.Module
@@ -14,4 +16,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindsGameRepository(gameRepositoryImpl: GameRepositoryImpl): GameRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindsAuthRepository(authRepositoryImpl: AuthRepositoryImpl): AuthRepository
 }
