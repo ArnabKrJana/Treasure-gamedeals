@@ -1,6 +1,7 @@
 package com.example.treasure.ui.screens
 
 import android.annotation.SuppressLint
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -32,7 +34,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -85,7 +89,6 @@ fun HomeScreenContent(
     onCardClick: (String) -> Unit
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
-    // Monitor errors for both lists
     val hotError = hotDeals.loadState.refresh as? LoadState.Error
     val lowestError = lowestPriceDeals.loadState.refresh as? LoadState.Error
 
@@ -106,66 +109,80 @@ fun HomeScreenContent(
     val mainListState = rememberSaveable(key = "home_vertical", saver = LazyListState.Saver) {
         LazyListState()
     }
-    val bottomPadding =
-        80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    Box(modifier = modifier.fillMaxSize()) {
+    val bottomPadding = 80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+    // Calculate Dynamic Screen Height (Carousel takes 82% of screen)
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+    val heroHeight = screenHeight * 0.82f
+
+    Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             state = mainListState,
-            modifier = Modifier
-                .fillMaxSize(),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = bottomPadding)
         ) {
 
             // --- 1. THE HERO CAROUSEL ---
             item(key = "hero_carousel") {
-                // Calculate Parallax & Fade based on scroll position
-                val scrollOffset = if (mainListState.firstVisibleItemIndex == 0) {
-                    mainListState.firstVisibleItemScrollOffset.toFloat()
-                } else {
-                    // If it's scrolled past the first item, max it out so it doesn't glitch
-                    1000f
-                }
-
-                Box(
+                TreasureUpcomingCarousel(
+                    games = dummyUpcomingGames,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(heroHeight)
                         .graphicsLayer {
-                            // Parallax effect: Moves up at half the speed of the scroll
+                            // Parallax: Slowly moves down as user scrolls up
+                            val scrollOffset = if (mainListState.firstVisibleItemIndex == 0) {
+                                mainListState.firstVisibleItemScrollOffset.toFloat()
+                            } else {
+                                heroHeight.toPx()
+                            }
                             translationY = scrollOffset * 0.5f
-                            // Fade effect: Slowly fades to 0 as user scrolls
-                            alpha = 1f - (scrollOffset / 800f).coerceIn(0f, 1f)
+                            // Fade effect
+                            alpha = 1f - (scrollOffset / (heroHeight.toPx() * 0.8f)).coerceIn(0f, 1f)
                         }
+                )
+            }
+
+            // --- 2. HOT DEALS ---
+            item(key = "header_hot") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(top = 16.dp)
                 ) {
-                    TreasureUpcomingCarousel(games = dummyUpcomingGames)
+                    SectionHeader(title = "Hot Deals", subtitle = "Trending right now")
+                    GameHorizontalList(
+                        deals = hotDeals,
+                        favoriteIds = favoriteIds,
+                        onToggleFavorite = onToggleFavorite,
+                        storageKey = "list_hot",
+                        onCardClick = onCardClick
+                    )
                 }
             }
-// 2. Hot Deals
-            item(key = "header_hot") {
-                Spacer(modifier = Modifier.height(16.dp))
-                SectionHeader(title = "Hot Deals", subtitle = "Trending right now")
-                GameHorizontalList(
-                    deals = hotDeals,
-                    favoriteIds = favoriteIds,
-                    onToggleFavorite = onToggleFavorite,
-                    storageKey = "list_hot",
-                    onCardClick = onCardClick
-                )
-            }
-            //3. Lowest Price Ever
-            item(key = "header_lowest") {
 
-                SectionHeader(
-                    title = "Lowest Price Ever",
-                    subtitle = "Historic low prices you won't see again"
-                )
-                GameHorizontalList(
-                    deals = lowestPriceDeals,
-                    favoriteIds = favoriteIds,
-                    onToggleFavorite = onToggleFavorite,
-                    storageKey = "list_lowest",
-                    onCardClick = onCardClick
-                )
+            // --- 3. LOWEST PRICE EVER ---
+            item(key = "header_lowest") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SectionHeader(
+                        title = "Lowest Price Ever",
+                        subtitle = "Historic low prices you won't see again"
+                    )
+                    GameHorizontalList(
+                        deals = lowestPriceDeals,
+                        favoriteIds = favoriteIds,
+                        onToggleFavorite = onToggleFavorite,
+                        storageKey = "list_lowest",
+                        onCardClick = onCardClick
+                    )
+                }
             }
         }
 
@@ -207,8 +224,6 @@ fun GameHorizontalList(
     if (loadState is LoadState.Loading && deals.itemCount == 0) {
         ShimmerRow()
     } else {
-        // If there's an error, it will just show an empty row (or whatever is already loaded)
-        // while the Snackbar in the parent handles the retry logic.
         RealGameRow(deals, favoriteIds, onToggleFavorite, storageKey, onCardClick)
     }
 }
@@ -299,30 +314,17 @@ fun HomeScreenPreview() {
             upVotes = UpVotes("80%", ColorCode.YELLOW),
             price = Price(59.99, 29.99),
             genres = listOf("RPG", "Sci-fi")
-        ),
-        GameCardItem(
-            id = "3",
-            listingIndex = 3,
-            title = "Red Dead Redemption 2",
-            thumbnail = null,
-            store = "Epic",
-            upVotes = UpVotes("97%", ColorCode.GREEN),
-            price = Price(59.99, 19.79),
-            genres = listOf("Action", "Western")
         )
     )
 
     val hotDealsFlow = flowOf(PagingData.from(sampleGames))
-    val lowestPriceDealsFlow = flowOf(PagingData.from(sampleGames.reversed()))
-
     val hotDeals = hotDealsFlow.collectAsLazyPagingItems()
-    val lowestPriceDeals = lowestPriceDealsFlow.collectAsLazyPagingItems()
 
     MaterialTheme {
         Surface {
             HomeScreenContent(
                 hotDeals = hotDeals,
-                lowestPriceDeals = lowestPriceDeals,
+                lowestPriceDeals = hotDeals,
                 favoriteIds = setOf("1"),
                 onToggleFavorite = {},
                 onCardClick = {}

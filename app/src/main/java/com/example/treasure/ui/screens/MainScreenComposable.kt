@@ -60,46 +60,40 @@ fun MainScreenComposable(
     rootNavController: NavHostController,
     notificationViewModel: NotificationViewModel = hiltViewModel()
 ) {
-    // 1. Create a specific controller for the Bottom Tabs
     val bottomNavController = rememberNavController()
-    val scrollBehavior =
-        TopAppBarDefaults.enterAlwaysScrollBehavior(state = rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(state = rememberTopAppBarState())
 
-    // 2. Observe current route to update Top Bar
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    // 3. Observe Notification Count
     val notificationCount by notificationViewModel.unreadCount.collectAsStateWithLifecycle()
 
-    // 4. Determine Top Bar State
-    val isDetailScreen = currentDestination?.hasRoute<LeafDestination.Detail>() == true
+    // --- IDENTIFY ACTIVE SCREENS ---
+    val isHomeScreen = currentDestination?.hasRoute<LeafDestination.HomeList>() == true
     val isSearchScreen = currentDestination?.hasRoute<LeafDestination.SearchInput>() == true
+    val isDetailScreen = currentDestination?.hasRoute<LeafDestination.Detail>() == true
     val isSettingScreen = currentDestination?.hasRoute<LeafDestination.SettingScreen>() == true
 
     val topBarTitle = if (isDetailScreen) {
         stringResource(R.string.details_title)
     } else {
-        // Find which tab we are on to set the title (Home, Search, etc.)
         when {
-            currentDestination?.hasRoute<LeafDestination.HomeList>() == true -> "Treasure"
-            currentDestination?.hasRoute<LeafDestination.SearchInput>() == true -> "Search"
+            isHomeScreen -> "Treasure"
+            isSearchScreen -> "Search"
             currentDestination?.hasRoute<LeafDestination.WishlistList>() == true -> "Wishlist"
-            currentDestination?.hasRoute<LeafDestination.SettingScreen>() == true -> "Settings"
+            isSettingScreen -> "Settings"
             else -> "Treasure"
         }
     }
 
     Scaffold(
-        modifier = Modifier
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
-        contentWindowInsets = WindowInsets(0.dp),
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        contentWindowInsets = WindowInsets(0.dp), // Keeps edge-to-edge functionality active
         topBar = {
-            // Hide parent TopAppBar on SearchScreen as it has its own SearchBar
             if (!isSearchScreen) {
                 TopAppBarComponent(
                     title = topBarTitle,
-                    canNavigateBack = isDetailScreen, // Only show back arrow on Detail
+                    canNavigateBack = isDetailScreen,
                     isSettingScreen = isSettingScreen,
                     notificationCount = notificationCount,
                     scrollBehavior = scrollBehavior,
@@ -111,18 +105,28 @@ fun MainScreenComposable(
             }
         },
         bottomBar = {
-            // Only show bottom bar if NOT on detail screen
             if (!isDetailScreen) {
                 BottomNavBar(bottomNavController)
             }
         }
     ) { innerPadding ->
 
+        // --- THE FIX: DYNAMIC TOP PADDING ---
+        // Home, Search, and Detail draw edge-to-edge.
+        // Wishlist and Settings get pushed safely below the TopAppBar.
+        val topPadding = if (isHomeScreen || isSearchScreen || isDetailScreen) {
+            0.dp
+        } else {
+            innerPadding.calculateTopPadding()
+        }
+
         NavHost(
             navController = bottomNavController,
             startDestination = NestedGraphDestination.HomeGraph,
-            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
-
+            modifier = Modifier.padding(
+                top = topPadding, // Applied here!
+                bottom = innerPadding.calculateBottomPadding()
+            ),
             enterTransition = { fadeIn(tween(220)) },
             exitTransition = { fadeOut(tween(220)) },
             popEnterTransition = { fadeIn(tween(220)) },
@@ -130,14 +134,12 @@ fun MainScreenComposable(
         ) {
 
             // --- HOME TAB ---
-            navigation<NestedGraphDestination.HomeGraph>(startDestination = LeafDestination.HomeList)
-            {
+            navigation<NestedGraphDestination.HomeGraph>(startDestination = LeafDestination.HomeList) {
                 composable<LeafDestination.HomeList>(
                     enterTransition = { fadeIn(tween(500)) },
                     exitTransition = { fadeOut(animationSpec = tween(300)) }
                 ) {
                     HomeScreen(
-                        // The 'id' here comes from the GameCard -> GameHorizontalList -> HomeScreen chain
                         onCardClick = { gameId ->
                             bottomNavController.navigate(
                                 LeafDestination.Detail(itemId = gameId, fromTab = "Home")
@@ -171,7 +173,6 @@ fun MainScreenComposable(
                             )
                         },
                         onBackClick = {
-                            // If user clicks back on SearchBar and it's not active, go to Home
                             bottomNavController.navigate(LeafDestination.HomeList) {
                                 popUpTo(LeafDestination.HomeList) { inclusive = true }
                             }

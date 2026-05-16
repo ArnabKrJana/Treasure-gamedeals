@@ -50,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
@@ -89,10 +90,6 @@ fun DetailScreen(
 ) {
     val gameDetail by viewModel.gameDetail.collectAsStateWithLifecycle()
 
-    // FIX 1: Observe 'getWishlistItems' directly instead of 'observeInteractionIds'.
-    // 'observeInteractionIds' (in the DAO) might return ALL interactions (including Cart),
-    // causing the heart to appear filled for non-favorites.
-    // 'getWishlistItems' correctly filters for isFavorite = 1.
     val wishlistItems by viewModel.repository.getWishlistItems().collectAsState(initial = emptyList())
     val isFavorite = wishlistItems.any { it.gameId == gameDetail?.id }
 
@@ -295,8 +292,6 @@ fun VideoPlayerOverlay(
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
 
-    // FIX 2: Wrap in a Dialog to ensure it covers the whole screen (including status bar area)
-    // properties = decorFitsSystemWindows = false is KEY for immersive mode
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -312,15 +307,12 @@ fun VideoPlayerOverlay(
             }
         }
 
-        // Manage Orientation AND System Bars (Immersive Mode)
         DisposableEffect(Unit) {
             val window = activity?.window
             val originalOrientation = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
 
-            // 1. Force Landscape
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
 
-            // 2. Hide System Bars (Immersive Sticky)
             if (window != null) {
                 val insetsController = WindowInsetsControllerCompat(window, window.decorView)
                 insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
@@ -328,10 +320,8 @@ fun VideoPlayerOverlay(
             }
 
             onDispose {
-                // Restore Orientation
                 activity?.requestedOrientation = originalOrientation
 
-                // Show System Bars again
                 if (window != null) {
                     val insetsController = WindowInsetsControllerCompat(window, window.decorView)
                     insetsController.show(WindowInsetsCompat.Type.systemBars())
@@ -371,12 +361,11 @@ fun VideoPlayerOverlay(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Close Button
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(16.dp) // Add padding for safe area
+                    .padding(16.dp)
                     .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(24.dp))
             ) {
                 Icon(
@@ -465,7 +454,10 @@ fun GameHeader(
     thumbnailUrl: String?,
     modifier: Modifier = Modifier
 ) {
+    val bgColor = MaterialTheme.colorScheme.background
+
     Box(modifier = modifier.height(280.dp)) {
+        // Banner Image
         AsyncImage(
             model = bannerUrl,
             contentDescription = null,
@@ -477,6 +469,25 @@ fun GameHeader(
             contentScale = ContentScale.Crop
         )
 
+        // TOP GRADIENT: Protects the Top App Bar text and icon visibility
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(110.dp) // Height matches the typical top app bar area
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            bgColor.copy(alpha = 0.85f),
+                            Color.Transparent
+                        ),
+                        startY = 0f,
+                        endY = Float.POSITIVE_INFINITY
+                    )
+                )
+        )
+
+        // Thumbnail Image
         AsyncImage(
             model = thumbnailUrl,
             contentDescription = null,

@@ -1,12 +1,14 @@
 package com.example.treasure.ui.uiComponents
 
 import android.content.res.Configuration
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -22,6 +24,18 @@ fun TopAppBarComponent(
     onBackBtnClick: () -> Unit,
     onNotificationBtnClick: () -> Unit
 ) {
+
+    // Smoothly animate from Transparent to a 95% opaque surface color when scrolled
+    val isOverlapping = scrollBehavior.state.overlappedFraction > 0.01f
+    val animatedContainerColor by animateColorAsState(
+        targetValue = if (isOverlapping) {
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = tween(durationMillis = 300),
+        label = "TopBarColorAnimation"
+    )
 
     TopAppBar(
 
@@ -84,9 +98,10 @@ fun TopAppBarComponent(
 
         scrollBehavior = scrollBehavior,
 
+        // Apply the animated color to both states so it relies strictly on our custom animation
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = Color.Transparent,
-            scrolledContainerColor = Color.Transparent,
+            containerColor = animatedContainerColor,
+            scrolledContainerColor = animatedContainerColor,
             navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
             actionIconContentColor = MaterialTheme.colorScheme.onSurface
@@ -166,4 +181,3 @@ fun TopAppBarPreview_Detail() {
         )
     }
 }
-

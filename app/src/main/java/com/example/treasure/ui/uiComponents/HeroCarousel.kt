@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.treasure.ui.theme.TreasureTheme
 import coil3.compose.AsyncImagePainter
 import coil3.compose.SubcomposeAsyncImage
 import coil3.compose.SubcomposeAsyncImageContent
@@ -51,16 +52,15 @@ fun TreasureUpcomingCarousel(
 
     val pagerState = rememberPagerState(pageCount = { games.size })
 
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
+    // Box allows the pagination dots to overlay directly on the image
+    Box(
+        modifier = modifier, // Takes fillMaxSize() from HomeScreen
+        contentAlignment = Alignment.BottomCenter
     ) {
         HorizontalPager(
             state = pagerState,
-            pageSpacing = 0.dp, // 1. REMOVED GAP HERE
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(500.dp)
+            pageSpacing = 0.dp, // 1. NO MORE GAPS
+            modifier = Modifier.fillMaxSize() // 2. NO MORE 500dp HARDCODE
         ) { page ->
 
             val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
@@ -69,7 +69,7 @@ fun TreasureUpcomingCarousel(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        // Removed scaling to keep it flush. Kept subtle crossfade.
+                        // 3. Removed scaleX/scaleY so images sit perfectly flush
                         alpha = 1f - (pageOffset * 0.4f).coerceIn(0f, 0.4f)
                     }
             ) {
@@ -77,18 +77,18 @@ fun TreasureUpcomingCarousel(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Pagination Dots
+        // Pagination Dots - Lifted slightly above the overlapping sheet
         Row(
             Modifier
                 .wrapContentHeight()
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.Center
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             repeat(pagerState.pageCount) { iteration ->
                 val isActive = pagerState.currentPage == iteration
-                val color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                val color = if (isActive) Color.White else Color.White.copy(alpha = 0.4f)
                 val width = if (isActive) 24.dp else 8.dp
                 Box(
                     modifier = Modifier
@@ -105,13 +105,11 @@ fun TreasureUpcomingCarousel(
 
 @Composable
 fun UpcomingCarouselItem(game: UpcomingGame) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
-    ) {
+    val bgColor = MaterialTheme.colorScheme.background
 
-        // 3. CUSTOM SHIMMER IMPLEMENTATION
+    Box(modifier = Modifier.fillMaxSize()) {
+
+        // Custom Shimmer Implementation
         SubcomposeAsyncImage(
             model = game.imageUrl,
             contentDescription = game.title,
@@ -126,7 +124,25 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
             }
         }
 
-        // Gradient Overlay
+        // TOP GRADIENT: Protects the Top App Bar text visibility
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            bgColor.copy(alpha = 0.85f),
+                            Color.Transparent
+                        ),
+                        startY = 0f,
+                        endY = Float.POSITIVE_INFINITY
+                    )
+                )
+        )
+
+        // BOTTOM GRADIENT: Protects the Carousel text
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -134,8 +150,8 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
                     Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.4f),
-                            Color.Black.copy(alpha = 0.95f)
+                            Color.Black.copy(alpha = 0.6f),
+                            Color.Black.copy(alpha = 0.9f)
                         ),
                         startY = 0f,
                         endY = Float.POSITIVE_INFINITY
@@ -147,7 +163,8 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(24.dp),
+                // LIFT CONTENT UP so it doesn't get swallowed by the 7% overlap of the Hot Deals list
+                .padding(bottom = 64.dp, start = 24.dp, end = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
@@ -162,9 +179,9 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
             Text(
                 text = game.title,
                 color = Color.White,
-                fontSize = 28.sp,
+                fontSize = 32.sp, // Cinematic size
                 fontWeight = FontWeight.ExtraBold,
-                lineHeight = 32.sp,
+                lineHeight = 36.sp,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -244,4 +261,32 @@ fun HeroSkeletonShimmer() {
     )
 
     Box(modifier = Modifier.fillMaxSize().background(brush))
+}
+
+@Preview(showBackground = true, name = "Light Mode")
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES, name = "Dark Mode")
+@Composable
+fun TreasureUpcomingCarouselPreview() {
+    val dummyUpcomingGames = listOf(
+        UpcomingGame(
+            "1",
+            "Forza Horizon 6",
+            "https://assets.xboxservices.com/assets/22/4d/224d155f-8d3c-4f63-a810-d4fad0cf374e.jpg?n=0399951111277_Wallpaper_Tablet_2048x2048_01.jpg",
+            "Coming 19 May 2026",
+            listOf("Shooter", "Survival")
+        ),
+        UpcomingGame(
+            "2",
+            "GTA VI",
+            "https://www.rockstargames.com/VI/_next/image?url=%2FVI%2F_next%2Fstatic%2Fmedia%2FJason_and_Lucia_02_With_Logos_square.b022b2d6.jpg&w=3024&q=75",
+            "Fall 2026",
+            listOf("Action", "Open World")
+        )
+    )
+
+    TreasureTheme {
+        Surface {
+            TreasureUpcomingCarousel(games = dummyUpcomingGames, modifier = Modifier.height(600.dp))
+        }
+    }
 }
