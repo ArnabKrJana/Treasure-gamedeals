@@ -6,6 +6,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 
@@ -30,6 +32,7 @@ fun TopAppBarComponent(
                 fontWeight = FontWeight.SemiBold
             )
         },
+
 
         navigationIcon = {
 
@@ -82,12 +85,12 @@ fun TopAppBarComponent(
         scrollBehavior = scrollBehavior,
 
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            scrolledContainerColor = MaterialTheme.colorScheme.surface,
+            containerColor = Color.Transparent,
+            scrolledContainerColor = Color.Transparent,
             navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
             actionIconContentColor = MaterialTheme.colorScheme.onSurface
-        )
+        ),
     )
 }
 

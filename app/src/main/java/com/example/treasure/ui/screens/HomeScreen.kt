@@ -1,9 +1,11 @@
 package com.example.treasure.ui.screens
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -30,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -45,6 +48,8 @@ import com.example.treasure.domain.uiModels.Price
 import com.example.treasure.domain.uiModels.UpVotes
 import com.example.treasure.ui.uiComponents.AnimatedShimmer
 import com.example.treasure.ui.uiComponents.GameCard
+import com.example.treasure.ui.uiComponents.TreasureUpcomingCarousel
+import com.example.treasure.ui.uiComponents.UpcomingGame
 import com.example.treasure.ui.viewModels.HomeScreenViewModel
 import com.example.treasure.utils.ColorCode
 import kotlinx.coroutines.flow.flowOf
@@ -69,6 +74,7 @@ fun HomeScreen(
     )
 }
 
+@SuppressLint("FrequentlyChangingValue")
 @Composable
 fun HomeScreenContent(
     modifier: Modifier = Modifier,
@@ -100,16 +106,43 @@ fun HomeScreenContent(
     val mainListState = rememberSaveable(key = "home_vertical", saver = LazyListState.Saver) {
         LazyListState()
     }
-    val bottomPadding = 80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val bottomPadding =
+        80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     Box(modifier = modifier.fillMaxSize()) {
 
         LazyColumn(
             state = mainListState,
             modifier = Modifier
                 .fillMaxSize(),
-                    contentPadding =PaddingValues(top = 16.dp, bottom = bottomPadding)
+            contentPadding = PaddingValues(bottom = bottomPadding)
         ) {
+
+            // --- 1. THE HERO CAROUSEL ---
+            item(key = "hero_carousel") {
+                // Calculate Parallax & Fade based on scroll position
+                val scrollOffset = if (mainListState.firstVisibleItemIndex == 0) {
+                    mainListState.firstVisibleItemScrollOffset.toFloat()
+                } else {
+                    // If it's scrolled past the first item, max it out so it doesn't glitch
+                    1000f
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            // Parallax effect: Moves up at half the speed of the scroll
+                            translationY = scrollOffset * 0.5f
+                            // Fade effect: Slowly fades to 0 as user scrolls
+                            alpha = 1f - (scrollOffset / 800f).coerceIn(0f, 1f)
+                        }
+                ) {
+                    TreasureUpcomingCarousel(games = dummyUpcomingGames)
+                }
+            }
+// 2. Hot Deals
             item(key = "header_hot") {
+                Spacer(modifier = Modifier.height(16.dp))
                 SectionHeader(title = "Hot Deals", subtitle = "Trending right now")
                 GameHorizontalList(
                     deals = hotDeals,
@@ -119,8 +152,9 @@ fun HomeScreenContent(
                     onCardClick = onCardClick
                 )
             }
-
+            //3. Lowest Price Ever
             item(key = "header_lowest") {
+
                 SectionHeader(
                     title = "Lowest Price Ever",
                     subtitle = "Historic low prices you won't see again"
@@ -296,3 +330,21 @@ fun HomeScreenPreview() {
         }
     }
 }
+
+// Dummy data for now
+val dummyUpcomingGames = listOf(
+    UpcomingGame(
+        "1",
+        "Forza Horizon 6",
+        "https://assets.xboxservices.com/assets/22/4d/224d155f-8d3c-4f63-a810-d4fad0cf374e.jpg?n=0399951111277_Wallpaper_Tablet_2048x2048_01.jpg",
+        "Coming 19 May 2026",
+        listOf("Shooter", "Survival")
+    ),
+    UpcomingGame(
+        "2",
+        "GTA VI",
+        "https://www.rockstargames.com/VI/_next/image?url=%2FVI%2F_next%2Fstatic%2Fmedia%2FJason_and_Lucia_02_With_Logos_square.b022b2d6.jpg&w=3024&q=75",
+        "Fall 2026",
+        listOf("Action", "Open World")
+    )
+)

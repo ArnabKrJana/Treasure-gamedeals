@@ -1,11 +1,10 @@
 package com.example.treasure.ui.uiComponents
 
+import android.annotation.SuppressLint
 import android.content.res.Configuration
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -13,63 +12,65 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImagePainter
+import coil3.compose.SubcomposeAsyncImage
+import coil3.compose.SubcomposeAsyncImageContent
 import kotlin.math.absoluteValue
-import com.example.treasure.R // Assuming this is your R file location
 
-// 1. Data Model Updated for Upcoming Games
 data class UpcomingGame(
+    val id: String,
     val title: String,
-    val imageRes: Int, // Using Int for offline drawable resources
+    val imageUrl: String,
     val releaseDate: String,
     val genres: List<String>
 )
 
-@OptIn(ExperimentalFoundationApi::class)
+@SuppressLint("FrequentlyChangingValue")
 @Composable
-fun TreasureUpcomingCarousel(games: List<UpcomingGame>) {
+fun TreasureUpcomingCarousel(
+    games: List<UpcomingGame>,
+    modifier: Modifier = Modifier
+) {
+    if (games.isEmpty()) return
+
     val pagerState = rememberPagerState(pageCount = { games.size })
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         HorizontalPager(
             state = pagerState,
-//            contentPadding = PaddingValues(horizontal = 24.dp),
-            pageSpacing = 16.dp,
+            pageSpacing = 0.dp, // 1. REMOVED GAP HERE
             modifier = Modifier
                 .fillMaxWidth()
                 .height(500.dp)
         ) { page ->
-            // Adding Sliding Animation (Scale and Alpha fade)
+
             val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        // Shrink the unfocused cards slightly
-                        val scale = 1f - (pageOffset * 0.1f).coerceIn(0f, 0.1f)
-                        scaleX = scale
-                        scaleY = scale
-                        // Fade out the unfocused cards slightly
-                        alpha = 1f - (pageOffset * 0.3f).coerceIn(0f, 0.3f)
+                        // Removed scaling to keep it flush. Kept subtle crossfade.
+                        alpha = 1f - (pageOffset * 0.4f).coerceIn(0f, 0.4f)
                     }
             ) {
                 UpcomingCarouselItem(game = games[page])
@@ -78,7 +79,7 @@ fun TreasureUpcomingCarousel(games: List<UpcomingGame>) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Pagination Dots adapting to Light/Dark theme
+        // Pagination Dots
         Row(
             Modifier
                 .wrapContentHeight()
@@ -87,11 +88,11 @@ fun TreasureUpcomingCarousel(games: List<UpcomingGame>) {
         ) {
             repeat(pagerState.pageCount) { iteration ->
                 val isActive = pagerState.currentPage == iteration
-                val color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                val width = if (isActive) 18.dp else 6.dp
+                val color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                val width = if (isActive) 24.dp else 8.dp
                 Box(
                     modifier = Modifier
-                        .padding(horizontal = 3.dp)
+                        .padding(horizontal = 4.dp)
                         .clip(CircleShape)
                         .background(color)
                         .height(6.dp)
@@ -107,69 +108,76 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .clip(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 16.dp, bottomEnd = 16.dp))
+            .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
     ) {
-        // 1. Background Image (Offline Drawable)
-        Image(
-            painter = painterResource(id = game.imageRes),
+
+        // 3. CUSTOM SHIMMER IMPLEMENTATION
+        SubcomposeAsyncImage(
+            model = game.imageUrl,
             contentDescription = game.title,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
-        )
+        ) {
+            val state = painter.state
+            if (state is AsyncImagePainter.State.Loading || state is AsyncImagePainter.State.Error) {
+                HeroSkeletonShimmer()
+            } else {
+                SubcomposeAsyncImageContent()
+            }
+        }
 
-        // 2. Gradient Overlay (Always dark to ensure white text readability over images)
+        // Gradient Overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.95f),
-                            Color.Black.copy(alpha = 0.5f),
-                            Color.Transparent
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.4f),
+                            Color.Black.copy(alpha = 0.95f)
                         ),
-                        startY = Float.POSITIVE_INFINITY,
-                        endY = 0f
+                        startY = 0f,
+                        endY = Float.POSITIVE_INFINITY
                     )
                 )
         )
 
-        // 3. Content Area (Bottom Left)
+        // Content Area
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Expected Release Date
             Text(
                 text = "EXPECTED: ${game.releaseDate.uppercase()}",
-                color = MaterialTheme.colorScheme.primaryContainer, // Pops against dark gradient
+                color = Color.LightGray,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
-                modifier = Modifier.padding(bottom = 6.dp)
+                letterSpacing = 1.5.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            // Title
             Text(
                 text = game.title,
-                color = Color.White, // Always white because of the dark gradient overlay
-                fontSize = 30.sp,
+                color = Color.White,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.ExtraBold,
-                lineHeight = 34.sp,
-                textAlign= TextAlign.Center,
-                modifier = Modifier.padding(bottom = 12.dp)
+                lineHeight = 32.sp,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Genres Row (Max 3)
             Row(
-                modifier = Modifier.padding(bottom = 20.dp),
+                modifier = Modifier.padding(bottom = 24.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 game.genres.take(3).forEach { genre ->
                     Surface(
-                        color = Color.White.copy(alpha = 0.2f),
+                        color = Color.White.copy(alpha = 0.15f),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
@@ -177,110 +185,63 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
                 }
             }
 
-            // Action Buttons
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Primary Action: Learn More (Capsule)
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Button(
-                    onClick = { /* TODO: Navigate to detail screen */ },
+                    onClick = { /* Navigate to detail */ },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White,
                         contentColor = Color.Black
                     ),
                     shape = RoundedCornerShape(50),
-                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                    contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Learn More",
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Icon(imageVector = Icons.Default.Info, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Learn More",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
+                    Text(text = "Learn More", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(16.dp))
 
-                // Secondary Action: Notify Me (+)
                 IconButton(
-                    onClick = { /* TODO: Set reminder/notification */ },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(Color.White.copy(alpha = 0.2f), CircleShape)
+                    onClick = { /* Notify logic */ },
+                    modifier = Modifier.size(52.dp).background(Color.White.copy(alpha = 0.2f), CircleShape)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Add, // Or Icons.Default.Notifications
-                        contentDescription = "Notify me when arrived",
-                        tint = Color.White
-                    )
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Notify me", tint = Color.White)
                 }
             }
         }
     }
 }
 
-// --- Mocks and Previews ---
-
-val mockUpcomingGames = listOf(
-    UpcomingGame(
-        title = "S.T.A.L.K.E.R. 2: Heart of Chornobyl",
-        imageRes = R.drawable.bg_0013, // Using your actual drawable filenames
-        releaseDate = "Q3 2026",
-        genres = listOf("Shooter", "Survival", "Horror")
-    ),
-    UpcomingGame(
-        title = "Grand Theft Auto VI",
-        imageRes = R.drawable.bg_0014,
-        releaseDate = "Fall 2026",
-        genres = listOf("Action", "Open World", "Adventure", "Crime") // 4th will be ignored by .take(3)
-    ),
-    UpcomingGame(
-        title = "The Witcher 4: Polaris",
-        imageRes = R.drawable.bg_0015,
-        releaseDate = "TBA",
-        genres = listOf("RPG", "Fantasy")
+// Custom Shimmer Background for the Hero Image
+@Composable
+fun HeroSkeletonShimmer() {
+    val transition = rememberInfiniteTransition(label = "hero_shimmer")
+    val translateAnim = transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_translate"
     )
-)
 
-// Preview for Light Theme
-@Preview(name = "Light Theme", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_NO)
-@Composable
-fun PreviewLightTreasureUpcomingCarousel() {
-    MaterialTheme { // Wrap in MaterialTheme to resolve colors
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-//                .padding(vertical = 16.dp)
-        ) {
-            TreasureUpcomingCarousel(games = mockUpcomingGames)
-        }
-    }
-}
+    val brush = Brush.linearGradient(
+        colors = listOf(
+            Color.DarkGray.copy(alpha = 0.6f),
+            Color.Gray.copy(alpha = 0.4f),
+            Color.DarkGray.copy(alpha = 0.6f)
+        ),
+        start = Offset.Zero,
+        end = Offset(x = translateAnim.value, y = translateAnim.value)
+    )
 
-// Preview for Dark Theme
-@Preview(name = "Dark Theme", showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
-@Composable
-fun PreviewDarkTreasureUpcomingCarousel() {
-    MaterialTheme {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-//                .padding(vertical = 16.dp)
-        ) {
-            TreasureUpcomingCarousel(games = mockUpcomingGames)
-        }
-    }
+    Box(modifier = Modifier.fillMaxSize().background(brush))
 }
