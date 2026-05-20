@@ -25,7 +25,7 @@ fun TopAppBarComponent(
     onNotificationBtnClick: () -> Unit
 ) {
 
-    // Smoothly animate from Transparent to a 95% opaque surface color when scrolled
+    // Smoothly animate from Transparent to a x% opaque surface color when scrolled
     val isOverlapping = scrollBehavior.state.overlappedFraction > 0.01f
     val animatedContainerColor by animateColorAsState(
         targetValue = if (isOverlapping) {
