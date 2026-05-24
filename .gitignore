@@ -15,3 +15,5 @@
 local.properties
 all_android_code.txt
 extract_code.py
+# Ignore large video assets
+*.mp4

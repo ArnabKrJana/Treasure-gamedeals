@@ -47,6 +47,8 @@ import com.example.treasure.ui.viewModels.NotificationViewModel
 import com.example.treasure.utils.ColorCode
 import androidx.paging.PagingData
 import androidx.paging.compose.collectAsLazyPagingItems
+import com.example.treasure.data.local.entity.enums.Role
+import com.example.treasure.domain.uiModels.User
 import kotlinx.coroutines.flow.flowOf
 import com.example.treasure.ui.Transitions
 import com.example.treasure.ui.Transitions.slideInFromLeft
@@ -61,7 +63,7 @@ fun MainScreenComposable(
     notificationViewModel: NotificationViewModel = hiltViewModel()
 ) {
     val bottomNavController = rememberNavController()
-    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(state = rememberTopAppBarState())
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -100,8 +102,18 @@ fun MainScreenComposable(
                     onBackBtnClick = { bottomNavController.popBackStack() },
                     onNotificationBtnClick = {
                         rootNavController.navigate(RootGraphDestination.NotificationRoute)
-                    }
+                    },
+                    currentUser = User(
+                        id = 1234,
+                        email = "some1234@gmail.com",
+                        fullName = "Someone Doe",
+                        profilePicture = "https://images.unsplash.com/photo-1778392099969-e1799d7dd4ea",
+                        role = Role.USER.name
+                    ),
+                    onLogoutClick = {},
+                    onDeleteAccountClick = {}
                 )
+
             }
         },
         bottomBar = {
