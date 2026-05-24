@@ -2,41 +2,62 @@ package com.example.treasure.data
 
 import com.example.treasure.data.local.entity.DealCategory
 import com.example.treasure.data.local.entity.DealEntity
-import com.example.treasure.data.remote.networkDto.itad.ItadDealItemDto
+import com.example.treasure.data.local.entity.SystemRequirementEntity
+import com.example.treasure.data.remote.dto.GameDto
+import com.example.treasure.domain.uiModels.RequirementType
+import com.example.treasure.domain.uiModels.Price
 
-fun ItadDealItemDto.toEntity(category: DealCategory, listingIndex: Int): DealEntity {
+// Use aliases to prevent import clashes between the two StoreDeals
+import com.example.treasure.data.remote.dto.StoreDeal as DtoStoreDeal
+import com.example.treasure.domain.uiModels.StoreDeal as UiStoreDeal
+
+fun GameDto.toEntity(category: DealCategory, listingIndex: Int): DealEntity {
     return DealEntity(
         id = this.id,
         listingIndex = listingIndex,
         title = this.title,
-
-
-        thumbnail = this.assets?.bannerUrl ?: this.assets?.boxArt,
-
-
-        storeId = this.deal.shop.name,
-        originalPrice = this.deal.regular.amount,
-        currentPrice = this.deal.price.amount,
-        discountPercent = this.deal.cut,
-
-        //Initial State (Pre-Enrichment)
-        upVotes = null,
-        upVoteColor = null,
+        thumbnail = this.thumbnail,
+        storeId = this.primaryStore ?: "Unknown",
+        originalPrice = this.originalPrice ?: 0.0,
+        currentPrice = this.currentPrice ?: 0.0,
+        discountPercent = this.discountPercent ?: 0,
+        upVotes = this.upVotes,
+        upVoteColor = this.upVoteColor,
         category = category,
+        platforms = this.platforms,
 
-        platforms = this.deal.platforms?.map { it.name },
+        description = this.description,
+        screenshots = this.screenshots,
+        trailerUrl = this.trailerUrl,
+        genres = this.genres,
+        developer = this.developer,
+        publisher = this.publisher,
+        franchise = this.franchise,
+        releaseDate = this.releaseDate,
+        maturityRating = this.maturityRating,
 
-        // (Nullable - Filled later by Enrichment)
-        description = null,
-        screenshots = null,
-        trailerUrl = null,
-        otherStores = null,
-        genres = null,
-        systemRequirements = null,
-        developer = null,
-        publisher = null,
-        franchise = null,
-        releaseDate = null,
-        maturityRating = null
+        // Map the DTO StoreDeal to the UI StoreDeal
+        otherStores = this.otherStores?.map { dtoStoreDeal ->
+            UiStoreDeal(
+                storeName = dtoStoreDeal.storeName,
+                dealUrl = dtoStoreDeal.dealUrl,
+                price = Price(
+                    originalPrice = dtoStoreDeal.originalPrice,
+                    currentPrice = dtoStoreDeal.currentPrice
+                )
+            )
+        },
+
+        systemRequirements = this.systemRequirements?.map {
+            SystemRequirementEntity(
+                specName = it.specName,
+                specValue = it.specValue,
+                type = try {
+                    RequirementType.valueOf(it.type.uppercase())
+                } catch (e: Exception) {
+                    RequirementType.MINIMUM
+                }
+            )
+        }
     )
 }
