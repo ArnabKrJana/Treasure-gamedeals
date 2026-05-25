@@ -48,6 +48,42 @@ class GameRepositoryImpl @Inject constructor(
         ).flow
     }
 
+    override suspend fun getAnticipatedGames(): List<GameCardItem> = withContext(Dispatchers.IO) {
+        try {
+            val response = treasureBackendApi.getAnticipatedGames()
+
+            if (response.isSuccessful && response.body() != null) {
+                // THE FIX: We MUST access .content here to get the actual List<GameDto> out of the SpringPageResponse wrapper
+                return@withContext response.body()!!.content.map { gameDto ->
+                    GameCardItem(
+                        id = gameDto.id,
+                        listingIndex = 0, // Unused for carousel
+                        title = gameDto.title,
+                        thumbnail = gameDto.thumbnail ?: gameDto.screenshots?.firstOrNull() ?: "",
+                        store = gameDto.primaryStore ?: "Multiple",
+                        upVotes = if (gameDto.upVotes != null) UpVotes(
+                            gameDto.upVotes,
+                            safeColorCode(gameDto.upVoteColor)
+                        ) else null,
+                        price = if (gameDto.originalPrice != null && gameDto.currentPrice != null) {
+                            Price(
+                                originalPrice = gameDto.originalPrice,
+                                currentPrice = gameDto.currentPrice
+                            )
+                        } else null,
+                        genres = gameDto.genres ?: emptyList(),
+                        releaseDate = gameDto.expectedReleaseDate
+
+                    )
+                }
+            }
+            return@withContext emptyList()
+        } catch (e: Exception) {
+            Log.e("GameRepository", "Failed to fetch anticipated games", e)
+            return@withContext emptyList()
+        }
+    }
+
     override fun observeGameDetails(dealId: String): Flow<DealEntity?> {
         return dealDao.observeDealById(dealId)
     }

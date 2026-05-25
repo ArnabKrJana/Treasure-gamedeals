@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -65,7 +66,6 @@ fun SearchScreen(
     onItemClick: (String) -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel()
 ) {
-    // New
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
     val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
@@ -75,6 +75,7 @@ fun SearchScreen(
         searchResults = searchResults,
         isSearching = isSearching,
         onQueryChange = { viewModel.onQueryChange(it) },
+        onSearchTriggered = { viewModel.performSearch() }, // 1. Pass the search trigger down
         onBackClick = onBackClick,
         onItemClick = onItemClick,
         modifier = modifier
@@ -88,6 +89,7 @@ fun SearchScreenContent(
     searchResults: List<GameCardItem>,
     isSearching: Boolean,
     onQueryChange: (String) -> Unit,
+    onSearchTriggered: () -> Unit, // 2. Receive the trigger
     onBackClick: () -> Unit,
     onItemClick: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -101,7 +103,10 @@ fun SearchScreenContent(
             SearchBar(
                 query = searchQuery,
                 onQueryChange = onQueryChange,
-                onSearch = { active = false },
+                onSearch = {
+                    active = false
+                    onSearchTriggered() // 3. Fire when Keyboard "Enter/Search" is pressed
+                },
                 active = active,
                 onActiveChange = { active = it },
                 placeholder = { Text("Search Games") },
@@ -117,8 +122,18 @@ fun SearchScreenContent(
                 },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
+                        Row {
+                            // 4. Fire when the visual Search icon is clicked
+                            IconButton(onClick = {
+                                active = false
+                                onSearchTriggered()
+                            }) {
+                                Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
+                            }
+                            // Clear button
+                            IconButton(onClick = { onQueryChange("") }) {
+                                Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
+                            }
                         }
                     }
                 },
@@ -139,6 +154,7 @@ fun SearchScreenContent(
                             .clickable {
                                 onQueryChange("Action")
                                 active = false
+                                onSearchTriggered() // 5. Fire when suggestion is clicked
                             }
                     )
                     Text(
@@ -148,6 +164,7 @@ fun SearchScreenContent(
                             .clickable {
                                 onQueryChange("RPG")
                                 active = false
+                                onSearchTriggered() // 5. Fire when suggestion is clicked
                             }
                     )
                 }
@@ -188,7 +205,6 @@ fun SearchGameCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // FIX: Read from the App's Theme state, NOT the System's state
     val isDark = LocalThemeIsDark.current
 
     Card(
@@ -203,10 +219,8 @@ fun SearchGameCard(
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
-        // Use BOX to stack Image behind Text
         Box(modifier = Modifier.fillMaxSize()) {
 
-            // 1. Background Thumbnail (Covers entire grid)
             if (game.thumbnail != null) {
                 AsyncImage(
                     model = game.thumbnail,
@@ -232,11 +246,10 @@ fun SearchGameCard(
                 }
             }
 
-            // 2. Gradient Overlay (For Text Readability)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(100.dp) // Height of the fade effect
+                    .height(100.dp)
                     .align(Alignment.BottomCenter)
                     .background(
                         Brush.verticalGradient(
@@ -245,13 +258,12 @@ fun SearchGameCard(
                     )
             )
 
-            // 3. Details (Bottom Center)
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally // Center text horizontally
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = game.title,
@@ -265,7 +277,7 @@ fun SearchGameCard(
                 if (game.genres.isNotEmpty()) {
                     Text(
                         text = game.genres.first(),
-                        color = Color(0xFFFF5252), // Red accent for genre
+                        color = Color(0xFFFF5252),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -292,6 +304,7 @@ fun SearchScreenPreview() {
         searchResults = emptyList(),
         isSearching = false,
         onQueryChange = {},
+        onSearchTriggered = {},
         onBackClick = {},
         onItemClick = {}
     )
@@ -300,19 +313,17 @@ fun SearchScreenPreview() {
 @Preview(showBackground = true)
 @Composable
 fun SearchGameCardPreview() {
-    // Dummy Data
     val dummyGame = GameCardItem(
         id = "1",
         listingIndex = 0,
         title = "God of War Ragnarök",
-        thumbnail = "https://example.com/image.jpg", // Won't load in preview, but placeholder will show
+        thumbnail = "https://example.com/image.jpg",
         store = "Steam",
         upVotes = UpVotes("95%", ColorCode.GREEN),
         price = Price(originalPrice = 4999.0, currentPrice = 2999.0),
         genres = listOf("Action", "Adventure")
     )
 
-    // Layout container for the preview
     Column(modifier = Modifier.padding(16.dp)) {
         SearchGameCard(
             game = dummyGame,

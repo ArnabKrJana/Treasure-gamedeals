@@ -10,7 +10,8 @@ data class GameCardItem(
     val store: String,
     val upVotes: UpVotes?,
     val price: Price?,
-    val genres: List<String> = emptyList()
+    val genres: List<String> = emptyList(),
+    val releaseDate: Long? =null
 )
 
 data class UpVotes(
