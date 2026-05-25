@@ -1,7 +1,9 @@
 package com.example.treasure.di.apiModule
 
 
+import com.example.treasure.BuildConfig
 import com.example.treasure.data.remote.apiService.AuthInterceptor
+import com.example.treasure.data.remote.apiService.TokenAuthenticator
 import com.example.treasure.data.remote.apiService.TreasureBackendApi
 import com.example.treasure.utils.Constants
 import com.example.treasure.utils.TokenManager
@@ -28,17 +30,27 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
-        // Optional: Add a logging interceptor to help debug your new BFF calls
+    fun provideHttpClient(
+        authInterceptor: AuthInterceptor,
+        tokenAuthenticator: TokenAuthenticator
+    ): OkHttpClient {
+//        val logging = HttpLoggingInterceptor().apply {
+//            level = HttpLoggingInterceptor.Level.BODY
+//        }
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level =
+                if (BuildConfig.DEBUG) {
+                    HttpLoggingInterceptor.Level.BODY
+                } else {
+                    HttpLoggingInterceptor.Level.NONE
+                }
         }
-
         return OkHttpClient.Builder()
             .readTimeout(15, TimeUnit.SECONDS)
             .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
-            .addInterceptor(logging) // Great for seeing the exact JSON Spring Boot returns
+            .addInterceptor(logging)
+            .authenticator(tokenAuthenticator)
             .build()
     }
 

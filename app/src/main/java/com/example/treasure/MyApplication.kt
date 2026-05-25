@@ -14,8 +14,6 @@ import androidx.work.WorkManager
 import com.example.treasure.data.repositoryImpl.SettingsRepository
 import com.example.treasure.utils.TokenManager
 import com.example.treasure.workers.PriceSyncWorker
-import com.google.firebase.remoteconfig.FirebaseRemoteConfig
-import com.google.firebase.remoteconfig.remoteConfigSettings
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,8 +21,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
-
-
 
 
 @HiltAndroidApp

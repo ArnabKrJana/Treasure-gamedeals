@@ -7,6 +7,9 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.example.treasure.domain.uiModels.User
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,6 +32,11 @@ class TokenManager @Inject constructor(
         )
     }
 
+    //  Create the reactive state. It defaults to true if a token already exists on cold boot.
+    private val _isSessionActive = MutableStateFlow(getAccessToken() != null)
+    val isSessionActive: StateFlow<Boolean> = _isSessionActive.asStateFlow()
+
+
     companion object {
         private const val KEY_ACCESS_TOKEN = "access_token"
         private const val KEY_REFRESH_TOKEN = "refresh_token"
@@ -42,6 +50,8 @@ class TokenManager @Inject constructor(
             putString(KEY_ACCESS_TOKEN, accessToken)
             putString(KEY_REFRESH_TOKEN, refreshToken)
         }
+        // 2. Broadcast that the user is logged in
+        _isSessionActive.value = true
     }
 
     fun getAccessToken(): String? {
@@ -78,5 +88,7 @@ class TokenManager @Inject constructor(
      */
     fun clearSession() {
         sharedPreferences.edit { clear() }
+        // Broadcast that the session is dead (Triggers the Eject Seat!)
+        _isSessionActive.value = false
     }
 }

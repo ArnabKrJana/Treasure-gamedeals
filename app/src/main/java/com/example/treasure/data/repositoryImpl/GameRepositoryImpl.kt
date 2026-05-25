@@ -117,6 +117,7 @@ class GameRepositoryImpl @Inject constructor(
         userInteractionDao.getAllInteractedIds()
 
     override suspend fun toggleFavorite(game: GameCardItem) {
+        // 1. Optimistic Local Update (Instant UI feedback)
         db.withTransaction {
             val currentInteraction = userInteractionDao.getInteractionForGame(game.id)
             val isCurrentlyFav = currentInteraction?.isFavorite ?: false
@@ -138,7 +139,15 @@ class GameRepositoryImpl @Inject constructor(
             userInteractionDao.insertInteraction(newInteraction)
         }
 
-        // NOTE: In Step 5, we will trigger treasureBackendApi.toggleWishlist(game.id) here!
+        // 2. Sync with Spring Boot BFF
+        try {
+            val response = treasureBackendApi.toggleWishlist(game.id)
+            if (!response.isSuccessful) {
+                Log.e("GameRepository", "Failed to sync wishlist to cloud: ${response.code()}")
+            }
+        } catch (e: Exception) {
+            Log.e("GameRepository", "Network exception syncing wishlist to cloud", e)
+        }
     }
 
     override suspend fun toggleCart(game: GameCardItem) {
