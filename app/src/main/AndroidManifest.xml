@@ -17,7 +17,9 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/app_icon"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Treasure">
+        android:theme="@style/Theme.Treasure"
+        android:usesCleartextTraffic="true"
+        >
 
         <provider
             android:name="androidx.startup.InitializationProvider"

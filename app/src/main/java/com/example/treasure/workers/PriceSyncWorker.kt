@@ -17,10 +17,8 @@ import com.example.treasure.R
 import com.example.treasure.data.local.TreasureDatabase
 import com.example.treasure.data.local.entity.NotificationEntity
 import com.example.treasure.data.local.entity.UserInteractionEntity
-import com.example.treasure.data.remote.apiService.ItadApi
-import com.example.treasure.data.remote.networkDto.itad.ItadOverviewPriceDto
+import com.example.treasure.data.remote.apiService.TreasureBackendApi
 import com.example.treasure.data.repositoryImpl.SettingsRepository
-import com.example.treasure.utils.Constants
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -33,16 +31,14 @@ class PriceSyncWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
     private val database: TreasureDatabase,
-    private val itadApi: ItadApi,
+    private val treasureBackendApi: TreasureBackendApi, // Swapped ItadApi for BFF
     private val settingsRepository: SettingsRepository
 ) : CoroutineWorker(appContext, workerParams) {
 
-    override suspend fun doWork(): Result {
-        return workDefinition()
-    }
+    override suspend fun doWork(): Result = workDefinition()
 
     private suspend fun workDefinition(): Result = withContext(Dispatchers.IO) {
-        Log.d("PriceSyncWorker", "Work started - checking for price updates")
+        Log.d("PriceSyncWorker", "Work started - checking for price updates via BFF")
 
         val areNotificationsEnabled = settingsRepository.areNotificationsEnabled.first()
         if (!areNotificationsEnabled) {
@@ -56,46 +52,33 @@ class PriceSyncWorker @AssistedInject constructor(
         try {
             val wishlistItems = database.userInteractionDao().getFavorites().first()
             if (wishlistItems.isEmpty()) {
-                Log.d("PriceSyncWorker", "No favorites found, skipping sync")
+                Log.d("PriceSyncWorker", "No local favorites found, skipping sync")
                 return@withContext Result.success()
             }
 
+            // --- 1. Single call to the BFF ---
+            // The TokenAuthenticator handles injecting the JWT automatically!
+            val response = treasureBackendApi.getWishlistPrices()
 
-            val gameIds = wishlistItems.map { it.gameId }
-            val chunkedGameIds = gameIds.chunked(40)
-            val allPrices = mutableMapOf<String, ItadOverviewPriceDto>()
-
-            for (chunk in chunkedGameIds) {
-                val response = itadApi.getPriceOverview(
-                    country = "IN",
-                    shops = "61,35,16",
-                    gameIds = chunk
-                )
-
-                if (response.isSuccessful && response.body() != null) {
-                    val priceMap = response.body()!!.prices.associateBy { it.id }
-                    allPrices.putAll(priceMap)
-                } else {
-                    val code = response.code()
-                    Log.e("PriceSyncWorker", "Failed to fetch chunk: $code")
-
-
-                    if (code in 500..599 || code == 429) {
-                        return@withContext Result.retry() 
-                    }
-
-                }
+            if (!response.isSuccessful || response.body() == null) {
+                val code = response.code()
+                Log.e("PriceSyncWorker", "Failed to fetch prices from BFF: $code")
+                // Retry if it's a server error or rate limit
+                return@withContext if (code in 500..599 || code == 429) Result.retry() else Result.failure()
             }
+
+            // Map of GameID -> Price String (e.g. "29.99")
+            val remotePricesMap = response.body()!!
 
             val changedGames = mutableListOf<NotificationEntity>()
             val updatedInteractions = mutableListOf<UserInteractionEntity>()
 
+            // --- 2. Compare local cache with BFF prices ---
             wishlistItems.forEach { localItem ->
-                val remoteItem = allPrices[localItem.gameId]
-                val newPrice = remoteItem?.current?.price?.amount
+                val newPriceString = remotePricesMap[localItem.gameId]
+                val newPrice = newPriceString?.toDoubleOrNull()
 
                 if (newPrice != null) {
-                    // Collect items that need DB updates instead of saving immediately
                     if (localItem.latestSyncedPrice != newPrice) {
                         updatedInteractions.add(
                             localItem.copy(
@@ -110,6 +93,7 @@ class PriceSyncWorker @AssistedInject constructor(
                         val diff = newPrice - snapshotPrice
                         val changePercent = diff / snapshotPrice
 
+                        // Check if the price drop exceeds the user's settings threshold
                         if (abs(changePercent) > thresholdDecimal) {
                             changedGames.add(
                                 NotificationEntity(
@@ -125,7 +109,7 @@ class PriceSyncWorker @AssistedInject constructor(
                 }
             }
 
-            
+            // --- 3. Update Local DB & Trigger Notifications ---
             if (updatedInteractions.isNotEmpty()) {
                 database.withTransaction {
                     updatedInteractions.forEach { interaction ->
@@ -136,75 +120,9 @@ class PriceSyncWorker @AssistedInject constructor(
 
             processNotifications(changedGames)
             Result.success()
+
         } catch (e: Exception) {
-            Log.e("PriceSyncWorker", "Work failed", e)
-            Result.failure()
-        }
-    }
-
-    /**
-     * TESTING LOGIC
-     */
-    private suspend fun demoWorkDefinition(): Result = withContext(Dispatchers.IO) {
-        Log.d("PriceSyncWorker", "DEMO Work started - testing notifications")
-        try {
-            val wishlistItems = database.userInteractionDao().getFavorites().first()
-            if (wishlistItems.isEmpty()) {
-                Log.d("PriceSyncWorker", "Demo: No favorites found, showing dummy notification")
-                showSingleGameNotification(
-                    NotificationEntity(
-                        gameId = "test_id",
-                        title = "Test: No Favorites Found",
-                        thumbnail = null,
-                        oldPrice = 100.0,
-                        newPrice = 90.0
-                    )
-                )
-                return@withContext Result.success()
-            }
-
-            val gameIds = wishlistItems.map { it.gameId }
-            val response = itadApi.getPriceOverview(
-                country = "IN",
-                shops = "61,35,16",
-                gameIds = gameIds
-            )
-
-            val changedGames = mutableListOf<NotificationEntity>()
-
-            if (response.isSuccessful && response.body() != null) {
-                val priceMap = response.body()!!.prices.associateBy { it.id }
-                wishlistItems.forEach { localItem ->
-                    val remoteItem = priceMap[localItem.gameId]
-                    val newPrice = remoteItem?.current?.price?.amount ?: (localItem.currentPrice - 1.0)
-
-                    changedGames.add(
-                        NotificationEntity(
-                            gameId = localItem.gameId,
-                            title = "[DEMO] ${localItem.title}",
-                            thumbnail = localItem.thumbnail,
-                            oldPrice = localItem.currentPrice,
-                            newPrice = newPrice
-                        )
-                    )
-                }
-            } else {
-                Log.e("PriceSyncWorker", "Demo: API failed, showing dummy")
-                changedGames.add(
-                    NotificationEntity(
-                        gameId = "api_fail",
-                        title = "Demo: API Request Failed",
-                        thumbnail = null,
-                        oldPrice = 0.0,
-                        newPrice = 0.0
-                    )
-                )
-            }
-
-            processNotifications(changedGames)
-            Result.success()
-        } catch (e: Exception) {
-            Log.e("PriceSyncWorker", "Demo Work failed", e)
+            Log.e("PriceSyncWorker", "Work failed due to exception", e)
             Result.failure()
         }
     }

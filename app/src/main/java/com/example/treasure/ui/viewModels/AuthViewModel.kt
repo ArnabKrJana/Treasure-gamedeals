@@ -5,7 +5,9 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.treasure.data.remote.auth.googleAuthHelper.GoogleAuthHelper
+import com.example.treasure.domain.repository.AuthRepository
 import com.example.treasure.domain.usecases.LoginWithGoogleUseCase
+import com.example.treasure.utils.TokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,9 +18,12 @@ import javax.inject.Inject
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val loginWithGoogleUseCase: LoginWithGoogleUseCase,
-    private val googleAuthHelper: GoogleAuthHelper // <-- Helper injected here
+    private val googleAuthHelper: GoogleAuthHelper,
+    private val tokenManager: TokenManager,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
-
+    // Observe the global session state directly from the TokenManager
+    val isSessionActive: StateFlow<Boolean> = tokenManager.isSessionActive
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -48,6 +53,29 @@ class AuthViewModel @Inject constructor(
             }
 
             _isLoading.value = false
+        }
+    }
+
+    // Add the Delete Account function for your Settings Screen
+    fun deleteMyAccount() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _error.value = null
+
+            // This calls the repo, hits the backend, and if successful,
+            // calls tokenManager.clearSession() automatically!
+            val result = authRepository.deleteAccount()
+
+            result.onFailure { exception ->
+                _error.value = exception.message ?: "Failed to delete account."
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            authRepository.logout() // Also calls clearSession()
         }
     }
 }

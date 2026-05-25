@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 sealed interface RootGraphDestination{
+    @Serializable data object WelcomeScreenRoute: RootGraphDestination
     @Serializable data object MainScreenRoute: RootGraphDestination
     @Serializable data object NotificationRoute: RootGraphDestination
     @Serializable data object CartRoute: RootGraphDestination
@@ -37,3 +38,4 @@ sealed interface LeafDestination {
     @Serializable
     data class Detail(val itemId: String, val fromTab: String) : LeafDestination
 }
+
