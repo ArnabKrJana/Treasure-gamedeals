@@ -1,5 +1,7 @@
 package com.example.treasure.di.repositoryModule
 
+import com.example.treasure.data.remote.auth.googleAuthHelper.GoogleAuthHelper
+import com.example.treasure.data.remote.auth.googleAuthHelper.GoogleAuthHelperImpl
 import com.example.treasure.data.repositoryImpl.AuthRepositoryImpl
 import com.example.treasure.data.repositoryImpl.GameRepositoryImpl
 import com.example.treasure.domain.repository.AuthRepository
@@ -20,4 +22,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindsAuthRepository(authRepositoryImpl: AuthRepositoryImpl): AuthRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindGoogleAuthHelper(
+        googleAuthHelperImpl: GoogleAuthHelperImpl
+    ): GoogleAuthHelper
 }

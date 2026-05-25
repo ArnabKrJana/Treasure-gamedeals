@@ -4,6 +4,7 @@ package com.example.treasure.di.apiModule
 import com.example.treasure.data.remote.apiService.AuthInterceptor
 import com.example.treasure.data.remote.apiService.TreasureBackendApi
 import com.example.treasure.utils.Constants
+import com.example.treasure.utils.TokenManager
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -21,7 +22,7 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideAuthInterceptor(tokenManager: com.example.treasure.utils.TokenManager): AuthInterceptor {
+    fun provideAuthInterceptor(tokenManager: TokenManager): AuthInterceptor {
         return AuthInterceptor(tokenManager)
     }
 
@@ -46,7 +47,6 @@ object NetworkModule {
     fun provideRetrofit(client: OkHttpClient): Retrofit {
         return Retrofit.Builder()
             .client(client)
-            // Make sure to add BACKEND_URL to your Constants.kt!
             .baseUrl(Constants.BACKEND_URL)
             .addConverterFactory(GsonConverterFactory.create())
             .build()

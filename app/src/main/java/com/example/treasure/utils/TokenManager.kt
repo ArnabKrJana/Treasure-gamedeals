@@ -1,15 +1,15 @@
 package com.example.treasure.utils
 
-
-
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.example.treasure.domain.uiModels.User
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
-import androidx.core.content.edit
 
 @Singleton
 class TokenManager @Inject constructor(
@@ -29,11 +29,54 @@ class TokenManager @Inject constructor(
         )
     }
 
-    fun saveApiKey(key: String) {
-        sharedPreferences.edit { putString("itad_api_key", key) }
+    companion object {
+        private const val KEY_ACCESS_TOKEN = "access_token"
+        private const val KEY_REFRESH_TOKEN = "refresh_token"
+        private const val KEY_USER_DATA = "user_data"
     }
 
-    fun getApiKey(): String? {
-        return sharedPreferences.getString("itad_api_key", null)
+    // --- TOKEN MANAGEMENT ---
+
+    fun saveTokens(accessToken: String, refreshToken: String) {
+        sharedPreferences.edit {
+            putString(KEY_ACCESS_TOKEN, accessToken)
+            putString(KEY_REFRESH_TOKEN, refreshToken)
+        }
+    }
+
+    fun getAccessToken(): String? {
+        return sharedPreferences.getString(KEY_ACCESS_TOKEN, null)
+    }
+
+    fun getRefreshToken(): String? {
+        return sharedPreferences.getString(KEY_REFRESH_TOKEN, null)
+    }
+
+    // --- USER PROFILE MANAGEMENT ---
+
+    fun saveUser(user: User) {
+        val userJson = Json.encodeToString(user)
+        sharedPreferences.edit { putString(KEY_USER_DATA, userJson) }
+    }
+
+    fun getUser(): User? {
+        val userJson = sharedPreferences.getString(KEY_USER_DATA, null)
+        return if (userJson != null) {
+            try {
+                Json.decodeFromString<User>(userJson)
+            } catch (e: Exception) {
+                null
+            }
+        } else null
+    }
+
+    // --- SESSION CONTROL ---
+
+    /**
+     * Atomically wipes all tokens and user data.
+     * Call this on Logout or when a Refresh Token expires.
+     */
+    fun clearSession() {
+        sharedPreferences.edit { clear() }
     }
 }

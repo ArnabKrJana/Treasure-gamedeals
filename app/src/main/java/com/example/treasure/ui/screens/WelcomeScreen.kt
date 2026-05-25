@@ -1,6 +1,7 @@
 package com.example.treasure.ui.screens
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
@@ -40,21 +41,27 @@ import com.example.treasure.R
 import com.example.treasure.ui.theme.TreasureTheme
 import com.example.treasure.ui.viewModels.AuthViewModel
 
-// 1. The Route Composable (Handles Hilt and Navigation)
 @Composable
 fun WelcomeScreen(
     viewModel: AuthViewModel = hiltViewModel(),
     onNavigateToHome: () -> Unit
 ) {
     val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val context = LocalContext.current
+
+    // Observe errors and show a Toast automatically
+    LaunchedEffect(error) {
+        error?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+        }
+    }
 
     WelcomeScreenContent(
         isLoading = isLoading,
         onGoogleSignInClick = {
-            // Trigger actual Google Sign-In intent here later.
-            viewModel.handleGoogleLoginSuccess("dummy_google_id_token") {
-                onNavigateToHome()
-            }
+            // The UI only cares about delegating the click to the ViewModel
+            viewModel.handleGoogleLogin(context, onNavigateToHome)
         }
     )
 }
@@ -104,7 +111,9 @@ fun WelcomeScreenContent(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(Color.Black)) {
 
         // --- LAYER 1: VIDEO BACKGROUND ---
         AndroidView(
@@ -112,7 +121,8 @@ fun WelcomeScreenContent(
                 PlayerView(ctx).apply {
                     player = exoPlayer
                     useController = false // Hide all controls
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM // Fill screen like a wallpaper
+                    resizeMode =
+                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM // Fill screen like a wallpaper
                 }
             },
             modifier = Modifier
@@ -227,7 +237,10 @@ fun WelcomeScreenContent(
                         .background(MaterialTheme.colorScheme.surface)
                         .clickable(enabled = false) {} // Consume clicks inside the card
                         .padding(horizontal = 24.dp, vertical = 48.dp)
-                        .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                        .padding(
+                            bottom = WindowInsets.navigationBars.asPaddingValues()
+                                .calculateBottomPadding()
+                        )
                 ) {
                     Text(
                         text = "Sign In",

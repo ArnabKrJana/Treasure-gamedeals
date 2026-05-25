@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 class GameRepositoryImpl @Inject constructor(
-    private val treasureBackendApi: TreasureBackendApi, // <-- Replaced ItadApi & SteamApi
+    private val treasureBackendApi: TreasureBackendApi,
     private val db: TreasureDatabase
 ) : GameRepository {
 
