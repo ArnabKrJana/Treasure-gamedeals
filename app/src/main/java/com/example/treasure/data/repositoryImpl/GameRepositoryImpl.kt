@@ -150,6 +150,45 @@ class GameRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun syncWishlistFromCloud(): Unit = withContext(Dispatchers.IO) {
+        try {
+            // 1. Hit our new fast BFF endpoint
+            val response = treasureBackendApi.getDetailedWishlist()
+
+            if (response.isSuccessful && response.body() != null) {
+                val fullGames = response.body()!!
+
+                // 2. Save directly into your EXISTING Room Database schema
+                db.withTransaction {
+                    // Reset all local favorites to false (preserves cart status)
+                    userInteractionDao.clearAllFavorites()
+
+                    fullGames.forEach { dto ->
+                        // Check if the game is already in DB (e.g., in cart)
+                        val existing = userInteractionDao.getInteractionForGame(dto.id)
+
+                        val newInteraction = UserInteractionEntity(
+                            gameId = dto.id,
+                            isFavorite = true, // Force true because it's from cloud wishlist
+                            isAddedToCart = existing?.isAddedToCart ?: false, // Preserve cart state
+                            timestamp = existing?.timestamp ?: System.currentTimeMillis(),
+                            title = dto.title,
+                            thumbnail = dto.thumbnail ?: dto.screenshots?.firstOrNull() ?: "",
+                            currentPrice = dto.currentPrice ?: 0.0,
+                            originalPrice = dto.originalPrice ?: 0.0,
+                            storeId = dto.primaryStore ?: "Multiple",
+                            latestSyncedPrice = dto.currentPrice ?: 0.0,
+                            lastSyncTimestamp = System.currentTimeMillis()
+                        )
+                        userInteractionDao.insertInteraction(newInteraction)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("GameRepository", "Failed to sync detailed wishlist from cloud", e)
+        }
+    }
+
     override suspend fun toggleCart(game: GameCardItem) {
         db.withTransaction {
             val currentInteraction = userInteractionDao.getInteractionForGame(game.id)

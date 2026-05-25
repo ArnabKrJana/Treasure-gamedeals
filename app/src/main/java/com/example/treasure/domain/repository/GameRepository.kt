@@ -18,6 +18,7 @@ interface GameRepository {
     suspend fun searchGames(query: String): List<GameCardItem>
 
     // --- NEW: User Interactions (Cart & Wishlist) ---
+    suspend fun syncWishlistFromCloud(): Unit
     fun getCartItems(): Flow<List<UserInteractionEntity>>
     fun getWishlistItems(): Flow<List<UserInteractionEntity>>
 
