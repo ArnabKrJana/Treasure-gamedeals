@@ -24,4 +24,5 @@
     <string name="steam_label">Steam</string>
     <string name="gog_label">GOG</string>
     <string name="epic_games_label">Epic Games</string>
+    <string name="default_web_client_id">963722074094-ta0g8028mt9q1negvl7nhhr6r45jfsc4.apps.googleusercontent.com</string>
 </resources>

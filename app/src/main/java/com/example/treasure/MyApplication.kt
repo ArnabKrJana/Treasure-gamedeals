@@ -40,30 +40,6 @@ class MyApplication: Application(), Configuration.Provider{
 
     override fun onCreate() {
         super.onCreate()
-
-        val remoteConfig = FirebaseRemoteConfig.getInstance()
-        val configSettings = remoteConfigSettings {
-            minimumFetchIntervalInSeconds = 0
-        }
-        remoteConfig.setConfigSettingsAsync(configSettings)
-
-        remoteConfig.fetchAndActivate()
-            .addOnCompleteListener { task ->
-                if (task.isSuccessful) {
-                    val updated = task.result
-                    Log.d("RemoteConfig", "Config params updated: $updated")
-
-                    val apiKey = remoteConfig.getString("itad_api_key")
-
-                    if (apiKey.isNotBlank()) {
-                        tokenManager.saveApiKey(apiKey)
-                        Log.d("RemoteConfig", "API Key saved securely")
-                    }
-                } else {
-                    Log.e("RemoteConfig", "Fetch failed")
-                }
-            }
-
         setupPeriodicWork()
        // observeWorkStatus()
     }
