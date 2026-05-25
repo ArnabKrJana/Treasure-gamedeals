@@ -53,7 +53,6 @@ import com.example.treasure.domain.uiModels.UpVotes
 import com.example.treasure.ui.uiComponents.AnimatedShimmer
 import com.example.treasure.ui.uiComponents.GameCard
 import com.example.treasure.ui.uiComponents.TreasureUpcomingCarousel
-import com.example.treasure.ui.uiComponents.UpcomingGame
 import com.example.treasure.ui.viewModels.HomeScreenViewModel
 import com.example.treasure.utils.ColorCode
 import kotlinx.coroutines.flow.flowOf
@@ -68,10 +67,14 @@ fun HomeScreen(
     val lowestPriceDeals = viewModel.lowestPriceDeals.collectAsLazyPagingItems()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
 
+    // 1. Observe the Anticipated Games from the ViewModel
+    val anticipatedGames by viewModel.anticipatedGames.collectAsStateWithLifecycle()
+
     HomeScreenContent(
         modifier = modifier,
         hotDeals = hotDeals,
         lowestPriceDeals = lowestPriceDeals,
+        anticipatedGames = anticipatedGames, // 2. Pass it down
         favoriteIds = favoriteIds,
         onToggleFavorite = { viewModel.toggleFavorite(it) },
         onCardClick = onCardClick
@@ -84,6 +87,7 @@ fun HomeScreenContent(
     modifier: Modifier = Modifier,
     hotDeals: LazyPagingItems<GameCardItem>,
     lowestPriceDeals: LazyPagingItems<GameCardItem>,
+    anticipatedGames: List<GameCardItem>, // 3. Accept the new parameter
     favoriteIds: Set<String>,
     onToggleFavorite: (GameCardItem) -> Unit,
     onCardClick: (String) -> Unit
@@ -126,7 +130,8 @@ fun HomeScreenContent(
             // --- 1. THE HERO CAROUSEL ---
             item(key = "hero_carousel") {
                 TreasureUpcomingCarousel(
-                    games = dummyUpcomingGames,
+                    games = anticipatedGames, // 4. Use the real backend data
+                    onGameClick = onCardClick, // 5. Wire up the navigation
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(heroHeight)
@@ -325,6 +330,7 @@ fun HomeScreenPreview() {
             HomeScreenContent(
                 hotDeals = hotDeals,
                 lowestPriceDeals = hotDeals,
+                anticipatedGames = sampleGames, // Provide sample data for preview
                 favoriteIds = setOf("1"),
                 onToggleFavorite = {},
                 onCardClick = {}
@@ -332,21 +338,3 @@ fun HomeScreenPreview() {
         }
     }
 }
-
-// Dummy data for now
-val dummyUpcomingGames = listOf(
-    UpcomingGame(
-        "1",
-        "Forza Horizon 6",
-        "https://assets.xboxservices.com/assets/22/4d/224d155f-8d3c-4f63-a810-d4fad0cf374e.jpg?n=0399951111277_Wallpaper_Tablet_2048x2048_01.jpg",
-        "Coming 19 May 2026",
-        listOf("Shooter", "Survival")
-    ),
-    UpcomingGame(
-        "2",
-        "GTA VI",
-        "https://www.rockstargames.com/VI/_next/image?url=%2FVI%2F_next%2Fstatic%2Fmedia%2FJason_and_Lucia_02_With_Logos_square.b022b2d6.jpg&w=3024&q=75",
-        "Fall 2026",
-        listOf("Action", "Open World")
-    )
-)

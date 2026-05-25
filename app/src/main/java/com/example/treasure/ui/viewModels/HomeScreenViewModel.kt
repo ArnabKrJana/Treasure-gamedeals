@@ -14,8 +14,10 @@ import com.example.treasure.domain.uiModels.UpVotes
 import com.example.treasure.utils.ColorCode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -37,11 +39,23 @@ class HomeScreenViewModel @Inject constructor(
         .getDealsPaged(DealCategory.LOWEST_PRICE)
         .map { pagingData -> pagingData.map { entity -> entity.toGameCardItem() } }
         .cachedIn(viewModelScope)
+    // --- 3. ANTICIPATED GAMES (CAROUSEL) ---
+    private val _anticipatedGames = MutableStateFlow<List<GameCardItem>>(emptyList())
+    val anticipatedGames: StateFlow<List<GameCardItem>> = _anticipatedGames.asStateFlow()
 
     // --- 3. USER INTERACTION STATE (The "Sidecar" Data) ---
     // We observe the database and convert the List<Entity> into a Set<String> of IDs.
     // This allows the UI to quickly check: "if (id in favoritesIds) { showRedHeart }"
 
+    init {
+        fetchAnticipatedGames()
+    }
+    private fun fetchAnticipatedGames() {
+        viewModelScope.launch {
+            val games = repository.getAnticipatedGames()
+            _anticipatedGames.value = games
+        }
+    }
     val favoriteIds: StateFlow<Set<String>> = repository.getWishlistItems()
         .map { list -> list.map { it.gameId }.toSet() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())

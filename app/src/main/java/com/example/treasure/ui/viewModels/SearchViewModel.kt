@@ -5,15 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.treasure.domain.repository.GameRepository
 import com.example.treasure.domain.uiModels.GameCardItem
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -31,23 +25,27 @@ class SearchViewModel @Inject constructor(
     private val _isSearching = MutableStateFlow(false)
     val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
+    // 1. Just updates the text on the screen while typing (NO API CALL)
     fun onQueryChange(newQuery: String) {
         _searchQuery.value = newQuery
-        if (newQuery.isBlank()) {
-            _searchResults.value = emptyList()
-        } else {
-            searchGames(newQuery)
-        }
     }
 
-    private fun searchGames(query: String) {
+    // 2. Actually fires the API call (Triggered ONLY by a button click)
+    fun performSearch() {
+        val query = _searchQuery.value.trim()
+
+        if (query.isBlank()) {
+            _searchResults.value = emptyList()
+            return
+        }
+
         viewModelScope.launch {
             _isSearching.value = true
             try {
                 val results = repository.searchGames(query)
                 _searchResults.value = results
             } catch (e: Exception) {
-                // Handle error
+                // Handle error or show empty state
                 _searchResults.value = emptyList()
             } finally {
                 _isSearching.value = false

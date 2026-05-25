@@ -32,35 +32,34 @@ import com.example.treasure.ui.theme.TreasureTheme
 import coil3.compose.AsyncImagePainter
 import coil3.compose.SubcomposeAsyncImage
 import coil3.compose.SubcomposeAsyncImageContent
+import com.example.treasure.domain.uiModels.GameCardItem
+import com.example.treasure.domain.uiModels.Price
+import com.example.treasure.domain.uiModels.UpVotes
+import com.example.treasure.utils.ColorCode
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.absoluteValue
-
-data class UpcomingGame(
-    val id: String,
-    val title: String,
-    val imageUrl: String,
-    val releaseDate: String,
-    val genres: List<String>
-)
 
 @SuppressLint("FrequentlyChangingValue")
 @Composable
 fun TreasureUpcomingCarousel(
-    games: List<UpcomingGame>,
+    games: List<GameCardItem>, // NOW TAKES YOUR REAL DATA MODEL
+    onGameClick: (String) -> Unit, // WIRED UP FOR NAVIGATION
     modifier: Modifier = Modifier
 ) {
     if (games.isEmpty()) return
 
     val pagerState = rememberPagerState(pageCount = { games.size })
 
-    // Box allows the pagination dots to overlay directly on the image
     Box(
-        modifier = modifier, // Takes fillMaxSize() from HomeScreen
+        modifier = modifier,
         contentAlignment = Alignment.BottomCenter
     ) {
         HorizontalPager(
             state = pagerState,
-            pageSpacing = 0.dp, // 1. NO MORE GAPS
-            modifier = Modifier.fillMaxSize() // 2. NO MORE 500dp HARDCODE
+            pageSpacing = 0.dp,
+            modifier = Modifier.fillMaxSize()
         ) { page ->
 
             val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
@@ -69,15 +68,16 @@ fun TreasureUpcomingCarousel(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        // 3. Removed scaleX/scaleY so images sit perfectly flush
                         alpha = 1f - (pageOffset * 0.4f).coerceIn(0f, 0.4f)
                     }
             ) {
-                UpcomingCarouselItem(game = games[page])
+                UpcomingCarouselItem(
+                    game = games[page],
+                    onGameClick = onGameClick // Pass it down to the button
+                )
             }
         }
 
-        // Pagination Dots - Lifted slightly above the overlapping sheet
         Row(
             Modifier
                 .wrapContentHeight()
@@ -104,14 +104,16 @@ fun TreasureUpcomingCarousel(
 }
 
 @Composable
-fun UpcomingCarouselItem(game: UpcomingGame) {
+fun UpcomingCarouselItem(
+    game: GameCardItem,
+    onGameClick: (String) -> Unit
+) {
     val bgColor = MaterialTheme.colorScheme.background
 
     Box(modifier = Modifier.fillMaxSize()) {
 
-        // Custom Shimmer Implementation
         SubcomposeAsyncImage(
-            model = game.imageUrl,
+            model = game.thumbnail,
             contentDescription = game.title,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
@@ -124,7 +126,6 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
             }
         }
 
-        // TOP GRADIENT: Protects the Top App Bar text visibility
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -142,7 +143,6 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
                 )
         )
 
-        // BOTTOM GRADIENT: Protects the Carousel text
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -159,16 +159,14 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
                 )
         )
 
-        // Content Area
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                // LIFT CONTENT UP so it doesn't get swallowed by the 7% overlap of the Hot Deals list
                 .padding(bottom = 64.dp, start = 24.dp, end = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "EXPECTED: ${game.releaseDate.uppercase()}",
+                text = "EXPECTED: ${formatReleaseDate(game.releaseDate)}",
                 color = Color.LightGray,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
@@ -179,7 +177,7 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
             Text(
                 text = game.title,
                 color = Color.White,
-                fontSize = 32.sp, // Cinematic size
+                fontSize = 32.sp,
                 fontWeight = FontWeight.ExtraBold,
                 lineHeight = 36.sp,
                 textAlign = TextAlign.Center,
@@ -210,7 +208,8 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Button(
-                    onClick = { /* Navigate to detail */ },
+                    // 1. FIRE THE NAVIGATION EVENT HERE
+                    onClick = { onGameClick(game.id) },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White,
                         contentColor = Color.Black
@@ -226,7 +225,7 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
                 Spacer(modifier = Modifier.width(16.dp))
 
                 IconButton(
-                    onClick = { /* Notify logic */ },
+                    onClick = { /* Save to wishlist or notify */ },
                     modifier = Modifier.size(52.dp).background(Color.White.copy(alpha = 0.2f), CircleShape)
                 ) {
                     Icon(imageVector = Icons.Default.Add, contentDescription = "Notify me", tint = Color.White)
@@ -236,7 +235,6 @@ fun UpcomingCarouselItem(game: UpcomingGame) {
     }
 }
 
-// Custom Shimmer Background for the Hero Image
 @Composable
 fun HeroSkeletonShimmer() {
     val transition = rememberInfiniteTransition(label = "hero_shimmer")
@@ -263,30 +261,44 @@ fun HeroSkeletonShimmer() {
     Box(modifier = Modifier.fillMaxSize().background(brush))
 }
 
+// --- HELPER FUNCTION TO FORMAT IGDB UNIX TIMESTAMPS ---
+private fun formatReleaseDate(timestamp: Long?): String {
+    if (timestamp == null || timestamp == 0L) return "TBA"
+    return try {
+        // IGDB timestamps are in seconds, so we multiply by 1000 for milliseconds
+        val date = Date(timestamp * 1000)
+        val format = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+        format.format(date).uppercase(Locale.getDefault())
+    } catch (e: Exception) {
+        "TBA"
+    }
+}
+
 @Preview(showBackground = true, name = "Light Mode")
 @Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES, name = "Dark Mode")
 @Composable
 fun TreasureUpcomingCarouselPreview() {
     val dummyUpcomingGames = listOf(
-        UpcomingGame(
-            "1",
-            "Forza Horizon 6",
-            "https://assets.xboxservices.com/assets/22/4d/224d155f-8d3c-4f63-a810-d4fad0cf374e.jpg?n=0399951111277_Wallpaper_Tablet_2048x2048_01.jpg",
-            "Coming 19 May 2026",
-            listOf("Shooter", "Survival")
-        ),
-        UpcomingGame(
-            "2",
-            "GTA VI",
-            "https://www.rockstargames.com/VI/_next/image?url=%2FVI%2F_next%2Fstatic%2Fmedia%2FJason_and_Lucia_02_With_Logos_square.b022b2d6.jpg&w=3024&q=75",
-            "Fall 2026",
-            listOf("Action", "Open World")
+        GameCardItem(
+            id = "1",
+            listingIndex = 0,
+            title = "Forza Horizon 6",
+            thumbnail = "https://assets.xboxservices.com/assets/22/4d/224d155f-8d3c-4f63-a810-d4fad0cf374e.jpg",
+            store = "Steam",
+            price = Price(0.0, 0.0),
+            genres = listOf("Racing", "Open World"),
+            releaseDate = 1779148800L,
+            upVotes = UpVotes("", ColorCode.GREEN) // Approx May 2026 in Unix time
         )
     )
 
     TreasureTheme {
         Surface {
-            TreasureUpcomingCarousel(games = dummyUpcomingGames, modifier = Modifier.height(600.dp))
+            TreasureUpcomingCarousel(
+                games = dummyUpcomingGames,
+                onGameClick = {},
+                modifier = Modifier.height(600.dp)
+            )
         }
     }
 }

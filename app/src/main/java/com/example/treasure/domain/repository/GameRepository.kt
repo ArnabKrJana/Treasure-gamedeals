@@ -11,6 +11,8 @@ interface GameRepository {
 
     fun getDealsPaged(category: DealCategory): Flow<PagingData<DealEntity>>
 
+    suspend fun getAnticipatedGames(): List<GameCardItem>
+
     // Phase 2: Detail View (Lazy Loading)
     fun observeGameDetails(dealId: String): Flow<DealEntity?>
     suspend fun fetchAndEnrichGameDetails(dealId: String)

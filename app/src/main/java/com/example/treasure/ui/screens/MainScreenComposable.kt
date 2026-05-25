@@ -55,13 +55,20 @@ import com.example.treasure.ui.Transitions.slideInFromLeft
 import com.example.treasure.ui.Transitions.slideInFromRight
 import com.example.treasure.ui.Transitions.slideOutToLeft
 import com.example.treasure.ui.Transitions.slideOutToRight
+import com.example.treasure.ui.viewModels.AuthViewModel
+import com.example.treasure.ui.viewModels.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreenComposable(
     rootNavController: NavHostController,
+    mainViewModel: MainViewModel = hiltViewModel(),
+    authViewModel: AuthViewModel = hiltViewModel(),
     notificationViewModel: NotificationViewModel = hiltViewModel()
 ) {
+    // 1. Observe real user data
+    val currentUser by mainViewModel.currentUser.collectAsStateWithLifecycle()
+
     val bottomNavController = rememberNavController()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
 
@@ -90,7 +97,7 @@ fun MainScreenComposable(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        contentWindowInsets = WindowInsets(0.dp), // Keeps edge-to-edge functionality active
+        contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             if (!isSearchScreen) {
                 TopAppBarComponent(
@@ -103,17 +110,11 @@ fun MainScreenComposable(
                     onNotificationBtnClick = {
                         rootNavController.navigate(RootGraphDestination.NotificationRoute)
                     },
-                    currentUser = User(
-                        id = 1234,
-                        email = "some1234@gmail.com",
-                        fullName = "Someone Doe",
-                        profilePicture = "https://images.unsplash.com/photo-1778392099969-e1799d7dd4ea",
-                        role = Role.USER.name
-                    ),
-                    onLogoutClick = {},
-                    onDeleteAccountClick = {}
+                    // 2. Wire the real data and auth triggers
+                    currentUser = currentUser,
+                    onLogoutClick = { authViewModel.logout() },
+                    onDeleteAccountClick = { authViewModel.deleteMyAccount() }
                 )
-
             }
         },
         bottomBar = {
@@ -122,10 +123,6 @@ fun MainScreenComposable(
             }
         }
     ) { innerPadding ->
-
-        // --- THE FIX: DYNAMIC TOP PADDING ---
-        // Home, Search, and Detail draw edge-to-edge.
-        // Wishlist and Settings get pushed safely below the TopAppBar.
         val topPadding = if (isHomeScreen || isSearchScreen || isDetailScreen) {
             0.dp
         } else {
@@ -136,7 +133,7 @@ fun MainScreenComposable(
             navController = bottomNavController,
             startDestination = NestedGraphDestination.HomeGraph,
             modifier = Modifier.padding(
-                top = topPadding, // Applied here!
+                top = topPadding,
                 bottom = innerPadding.calculateBottomPadding()
             ),
             enterTransition = { fadeIn(tween(220)) },
@@ -266,7 +263,9 @@ fun MainScreenHomePreview() {
                 lowestPriceDeals = hotDeals,
                 favoriteIds = emptySet(),
                 onToggleFavorite = {},
-                onCardClick = {}
+                onCardClick = {},
+                modifier = Modifier,
+                anticipatedGames = emptyList()
             )
         }
     }
