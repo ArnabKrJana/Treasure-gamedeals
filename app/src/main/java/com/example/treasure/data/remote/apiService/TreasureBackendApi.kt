@@ -97,4 +97,9 @@ interface TreasureBackendApi {
 
     @GET("api/v1/users/wishlist/prices")
     suspend fun getWishlistPrices(): Response<Map<String, String>>
+
+    @GET("api/v1/users/wishlist/detailed")
+    suspend fun getDetailedWishlist(): Response<List<GameDto>>
+
+
 }

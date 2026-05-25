@@ -26,4 +26,7 @@ interface UserInteractionDao {
     // Returns row ID (Long) synchronously.
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertInteraction(interaction: UserInteractionEntity): Long
+
+    @Query("UPDATE user_interactions SET isFavorite = 0")
+    suspend fun clearAllFavorites(): @JvmSuppressWildcards Int
 }

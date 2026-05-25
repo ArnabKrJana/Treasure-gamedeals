@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.treasure.data.remote.auth.googleAuthHelper.GoogleAuthHelper
 import com.example.treasure.domain.repository.AuthRepository
+import com.example.treasure.domain.repository.GameRepository
 import com.example.treasure.domain.usecases.LoginWithGoogleUseCase
 import com.example.treasure.utils.TokenManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,9 +21,10 @@ class AuthViewModel @Inject constructor(
     private val loginWithGoogleUseCase: LoginWithGoogleUseCase,
     private val googleAuthHelper: GoogleAuthHelper,
     private val tokenManager: TokenManager,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val gameRepository: GameRepository
 ) : ViewModel() {
-    // Observe the global session state directly from the TokenManager
+
     val isSessionActive: StateFlow<Boolean> = tokenManager.isSessionActive
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -35,26 +37,28 @@ class AuthViewModel @Inject constructor(
             _isLoading.value = true
             _error.value = null
 
-            // 1. Get the ID Token from the Native Bridge
             val idToken = googleAuthHelper.signIn(context)
 
             if (idToken != null) {
-                // 2. Send the token to the backend
                 val result = loginWithGoogleUseCase(idToken)
 
                 result.onSuccess { user ->
+                    // 2. TRIGGER THE SYNC BEFORE NAVIGATING TO HOME!
+                    gameRepository.syncWishlistFromCloud()
+
                     onLoginSuccess()
                 }.onFailure { exception ->
                     _error.value = exception.message ?: "Authentication with server failed."
                 }
             } else {
-                // The user dismissed the sheet or there was a Google Services error
                 _error.value = "Google Sign-In was cancelled or failed."
             }
 
             _isLoading.value = false
         }
     }
+
+    // ... Keep deleteMyAccount() and logout() exactly as they are ...
 
     // Add the Delete Account function for your Settings Screen
     fun deleteMyAccount() {
