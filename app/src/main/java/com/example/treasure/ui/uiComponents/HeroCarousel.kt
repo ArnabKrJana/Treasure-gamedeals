@@ -10,7 +10,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.BrokenImage
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -44,11 +46,18 @@ import kotlin.math.absoluteValue
 @SuppressLint("FrequentlyChangingValue")
 @Composable
 fun TreasureUpcomingCarousel(
-    games: List<GameCardItem>, // NOW TAKES YOUR REAL DATA MODEL
-    onGameClick: (String) -> Unit, // WIRED UP FOR NAVIGATION
+    games: List<GameCardItem>,
+    favoriteIds: Set<String>, // FIX: Added favorite IDs state
+    onToggleFavorite: (GameCardItem) -> Unit, // FIX: Added Toggle action
+    onGameClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    if (games.isEmpty()) return
+    if (games.isEmpty()) {
+        Box(modifier = modifier) {
+            HeroSkeletonShimmer()
+        }
+        return
+    }
 
     val pagerState = rememberPagerState(pageCount = { games.size })
 
@@ -62,7 +71,9 @@ fun TreasureUpcomingCarousel(
             modifier = Modifier.fillMaxSize()
         ) { page ->
 
-            val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
+            val pageOffset =
+                ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
+            val currentGame = games[page]
 
             Box(
                 modifier = Modifier
@@ -72,8 +83,10 @@ fun TreasureUpcomingCarousel(
                     }
             ) {
                 UpcomingCarouselItem(
-                    game = games[page],
-                    onGameClick = onGameClick // Pass it down to the button
+                    game = currentGame,
+                    isFavorite = currentGame.id in favoriteIds, // Check if favorited
+                    onToggleFavorite = onToggleFavorite, // Pass action
+                    onGameClick = onGameClick
                 )
             }
         }
@@ -106,6 +119,8 @@ fun TreasureUpcomingCarousel(
 @Composable
 fun UpcomingCarouselItem(
     game: GameCardItem,
+    isFavorite: Boolean, // Added state
+    onToggleFavorite: (GameCardItem) -> Unit, // Added toggle
     onGameClick: (String) -> Unit
 ) {
     val bgColor = MaterialTheme.colorScheme.background
@@ -118,11 +133,25 @@ fun UpcomingCarouselItem(
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
         ) {
-            val state = painter.state
-            if (state is AsyncImagePainter.State.Loading || state is AsyncImagePainter.State.Error) {
-                HeroSkeletonShimmer()
-            } else {
-                SubcomposeAsyncImageContent()
+            when (painter.state) {
+                is AsyncImagePainter.State.Loading -> HeroSkeletonShimmer()
+                is AsyncImagePainter.State.Error -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFF121212)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BrokenImage,
+                            contentDescription = "Image not available",
+                            tint = Color.White.copy(alpha = 0.2f),
+                            modifier = Modifier.size(64.dp)
+                        )
+                    }
+                }
+
+                else -> SubcomposeAsyncImageContent()
             }
         }
 
@@ -187,20 +216,25 @@ fun UpcomingCarouselItem(
             )
 
             Row(
-                modifier = Modifier.padding(bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .padding(bottom = 24.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center
             ) {
-                game.genres.take(3).forEach { genre ->
+                game.genres.take(2).forEach { genre ->
                     Surface(
                         color = Color.White.copy(alpha = 0.15f),
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.padding(horizontal = 4.dp)
                     ) {
                         Text(
                             text = genre,
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -208,7 +242,6 @@ fun UpcomingCarouselItem(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Button(
-                    // 1. FIRE THE NAVIGATION EVENT HERE
                     onClick = { onGameClick(game.id) },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.White,
@@ -217,55 +250,75 @@ fun UpcomingCarouselItem(
                     shape = RoundedCornerShape(50),
                     contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Info, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = "Learn More", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(text = "Know More", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 }
 
                 Spacer(modifier = Modifier.width(16.dp))
 
+                // FIX: Configured the Wishlist Icon Button!
                 IconButton(
-                    onClick = { /* Save to wishlist or notify */ },
-                    modifier = Modifier.size(52.dp).background(Color.White.copy(alpha = 0.2f), CircleShape)
+                    onClick = { onToggleFavorite(game) },
+                    modifier = Modifier
+                        .size(52.dp)
+                        .background(Color.White.copy(alpha = 0.2f), CircleShape)
                 ) {
-                    Icon(imageVector = Icons.Default.Add, contentDescription = "Notify me", tint = Color.White)
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Toggle Favorite",
+                        tint = if (isFavorite) Color(0xFFFF5252) else Color.White // Turns red when favorited
+                    )
                 }
             }
         }
     }
 }
 
+//@Preview
 @Composable
 fun HeroSkeletonShimmer() {
+    // 1. Define Colors (Neutral Grays matching your app's AnimatedShimmer)
+    val shimmerColors = listOf(
+        Color.LightGray.copy(alpha = 0.6f),
+        Color.LightGray.copy(alpha = 0.2f),
+        Color.LightGray.copy(alpha = 0.6f),
+    )
+
+    // 2. Setup Transition
     val transition = rememberInfiniteTransition(label = "hero_shimmer")
     val translateAnim = transition.animateFloat(
         initialValue = 0f,
-        targetValue = 1000f,
+        targetValue = 1000f, // Match target value
         animationSpec = infiniteRepeatable(
-            animation = tween(1200, easing = LinearEasing),
+            animation = tween(
+                durationMillis = 1000, // Matched duration
+                easing = FastOutSlowInEasing // Premium swipe easing
+            ),
             repeatMode = RepeatMode.Restart
         ),
         label = "shimmer_translate"
     )
 
+    // 3. Create the Moving Brush
     val brush = Brush.linearGradient(
-        colors = listOf(
-            Color.DarkGray.copy(alpha = 0.6f),
-            Color.Gray.copy(alpha = 0.4f),
-            Color.DarkGray.copy(alpha = 0.6f)
-        ),
+        colors = shimmerColors,
         start = Offset.Zero,
         end = Offset(x = translateAnim.value, y = translateAnim.value)
     )
 
-    Box(modifier = Modifier.fillMaxSize().background(brush))
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .background(brush))
 }
 
-// --- HELPER FUNCTION TO FORMAT IGDB UNIX TIMESTAMPS ---
 private fun formatReleaseDate(timestamp: Long?): String {
     if (timestamp == null || timestamp == 0L) return "TBA"
     return try {
-        // IGDB timestamps are in seconds, so we multiply by 1000 for milliseconds
         val date = Date(timestamp * 1000)
         val format = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
         format.format(date).uppercase(Locale.getDefault())
@@ -288,7 +341,7 @@ fun TreasureUpcomingCarouselPreview() {
             price = Price(0.0, 0.0),
             genres = listOf("Racing", "Open World"),
             releaseDate = 1779148800L,
-            upVotes = UpVotes("", ColorCode.GREEN) // Approx May 2026 in Unix time
+            upVotes = UpVotes("", ColorCode.GREEN)
         )
     )
 
@@ -296,6 +349,8 @@ fun TreasureUpcomingCarouselPreview() {
         Surface {
             TreasureUpcomingCarousel(
                 games = dummyUpcomingGames,
+                favoriteIds = setOf("1"), // Preview state
+                onToggleFavorite = {},
                 onGameClick = {},
                 modifier = Modifier.height(600.dp)
             )

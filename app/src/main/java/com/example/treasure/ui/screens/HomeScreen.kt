@@ -66,15 +66,13 @@ fun HomeScreen(
     val hotDeals = viewModel.hotDeals.collectAsLazyPagingItems()
     val lowestPriceDeals = viewModel.lowestPriceDeals.collectAsLazyPagingItems()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
-
-    // 1. Observe the Anticipated Games from the ViewModel
     val anticipatedGames by viewModel.anticipatedGames.collectAsStateWithLifecycle()
 
     HomeScreenContent(
         modifier = modifier,
         hotDeals = hotDeals,
         lowestPriceDeals = lowestPriceDeals,
-        anticipatedGames = anticipatedGames, // 2. Pass it down
+        anticipatedGames = anticipatedGames,
         favoriteIds = favoriteIds,
         onToggleFavorite = { viewModel.toggleFavorite(it) },
         onCardClick = onCardClick
@@ -87,7 +85,7 @@ fun HomeScreenContent(
     modifier: Modifier = Modifier,
     hotDeals: LazyPagingItems<GameCardItem>,
     lowestPriceDeals: LazyPagingItems<GameCardItem>,
-    anticipatedGames: List<GameCardItem>, // 3. Accept the new parameter
+    anticipatedGames: List<GameCardItem>,
     favoriteIds: Set<String>,
     onToggleFavorite: (GameCardItem) -> Unit,
     onCardClick: (String) -> Unit
@@ -115,7 +113,6 @@ fun HomeScreenContent(
     }
     val bottomPadding = 80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    // Calculate Dynamic Screen Height (Carousel takes 82% of screen)
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
     val heroHeight = screenHeight * 0.82f
@@ -130,20 +127,20 @@ fun HomeScreenContent(
             // --- 1. THE HERO CAROUSEL ---
             item(key = "hero_carousel") {
                 TreasureUpcomingCarousel(
-                    games = anticipatedGames, // 4. Use the real backend data
-                    onGameClick = onCardClick, // 5. Wire up the navigation
+                    games = anticipatedGames,
+                    favoriteIds = favoriteIds, // FIX: Pass down favorite state
+                    onToggleFavorite = onToggleFavorite, // FIX: Pass down toggle action
+                    onGameClick = onCardClick,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(heroHeight)
                         .graphicsLayer {
-                            // Parallax: Slowly moves down as user scrolls up
                             val scrollOffset = if (mainListState.firstVisibleItemIndex == 0) {
                                 mainListState.firstVisibleItemScrollOffset.toFloat()
                             } else {
                                 heroHeight.toPx()
                             }
                             translationY = scrollOffset * 0.5f
-                            // Fade effect
                             alpha = 1f - (scrollOffset / (heroHeight.toPx() * 0.8f)).coerceIn(0f, 1f)
                         }
                 )
@@ -330,7 +327,7 @@ fun HomeScreenPreview() {
             HomeScreenContent(
                 hotDeals = hotDeals,
                 lowestPriceDeals = hotDeals,
-                anticipatedGames = sampleGames, // Provide sample data for preview
+                anticipatedGames = sampleGames,
                 favoriteIds = setOf("1"),
                 onToggleFavorite = {},
                 onCardClick = {}
