@@ -59,11 +59,42 @@ class DealRemoteMediator(
             // Looking at your GameDealDtos, DealCategory has a categoryName property
             val categoryString = category.name
 
-            val response = service.getDeals(
-                category = categoryString,
-                page = pageToBeFetched,
-                size = size
-            )
+            val response = when (category) {
+
+                DealCategory.HOT_DEALS,
+                DealCategory.LOWEST_PRICE -> {
+
+                    service.getDeals(
+                        category = category.name,
+                        page = pageToBeFetched,
+                        size = size
+                    )
+                }
+
+                DealCategory.MAC_DEALS -> {
+
+                    service.getPlatformDeals(
+                        platformId = 2,
+                        page = pageToBeFetched,
+                        size = size
+                    )
+                }
+
+                DealCategory.LINUX_DEALS -> {
+
+                    service.getPlatformDeals(
+                        platformId = 3,
+                        page = pageToBeFetched,
+                        size = size
+                    )
+                }
+
+                DealCategory.SEARCH -> {
+                    throw IllegalArgumentException(
+                        "SEARCH category should not use RemoteMediator"
+                    )
+                }
+            }
 
             if (!response.isSuccessful) {
                 return MediatorResult.Error(HttpException(response))

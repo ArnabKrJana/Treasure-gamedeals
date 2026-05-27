@@ -49,5 +49,7 @@ data class DealEntity(
 enum class DealCategory {
     HOT_DEALS,
     LOWEST_PRICE,
+    MAC_DEALS,
+    LINUX_DEALS,
     SEARCH
 }

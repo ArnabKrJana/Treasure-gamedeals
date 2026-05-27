@@ -4,10 +4,20 @@ import androidx.paging.PagingData
 import com.example.treasure.data.local.entity.DealCategory
 import com.example.treasure.data.local.entity.DealEntity
 import com.example.treasure.data.local.entity.UserInteractionEntity
+import com.example.treasure.data.remote.dto.SpringPageResponse
 import com.example.treasure.domain.uiModels.GameCardItem
 import kotlinx.coroutines.flow.Flow
 
 interface GameRepository {
+//    suspend fun getMacDeals(
+//        page: Int,
+//        size: Int
+//    ): Result<SpringPageResponse<DealEntity>>
+//
+//    suspend fun getLinuxDeals(
+//        page: Int,
+//        size: Int
+//    ): Result<SpringPageResponse<DealEntity>>
 
     fun getDealsPaged(category: DealCategory): Flow<PagingData<DealEntity>>
 

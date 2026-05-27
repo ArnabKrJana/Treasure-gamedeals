@@ -65,6 +65,8 @@ fun HomeScreen(
 ) {
     val hotDeals = viewModel.hotDeals.collectAsLazyPagingItems()
     val lowestPriceDeals = viewModel.lowestPriceDeals.collectAsLazyPagingItems()
+    val macDeals = viewModel.macDeals.collectAsLazyPagingItems()
+    val linuxDeals = viewModel.linuxDeals.collectAsLazyPagingItems()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
     val anticipatedGames by viewModel.anticipatedGames.collectAsStateWithLifecycle()
 
@@ -72,6 +74,8 @@ fun HomeScreen(
         modifier = modifier,
         hotDeals = hotDeals,
         lowestPriceDeals = lowestPriceDeals,
+        macDeals = macDeals,
+        linuxDeals = linuxDeals,
         anticipatedGames = anticipatedGames,
         favoriteIds = favoriteIds,
         onToggleFavorite = { viewModel.toggleFavorite(it) },
@@ -85,6 +89,8 @@ fun HomeScreenContent(
     modifier: Modifier = Modifier,
     hotDeals: LazyPagingItems<GameCardItem>,
     lowestPriceDeals: LazyPagingItems<GameCardItem>,
+    macDeals: LazyPagingItems<GameCardItem>,
+    linuxDeals: LazyPagingItems<GameCardItem>,
     anticipatedGames: List<GameCardItem>,
     favoriteIds: Set<String>,
     onToggleFavorite: (GameCardItem) -> Unit,
@@ -111,7 +117,8 @@ fun HomeScreenContent(
     val mainListState = rememberSaveable(key = "home_vertical", saver = LazyListState.Saver) {
         LazyListState()
     }
-    val bottomPadding = 80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val bottomPadding =
+        80.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
@@ -141,7 +148,8 @@ fun HomeScreenContent(
                                 heroHeight.toPx()
                             }
                             translationY = scrollOffset * 0.5f
-                            alpha = 1f - (scrollOffset / (heroHeight.toPx() * 0.8f)).coerceIn(0f, 1f)
+                            alpha =
+                                1f - (scrollOffset / (heroHeight.toPx() * 0.8f)).coerceIn(0f, 1f)
                         }
                 )
             }
@@ -186,7 +194,54 @@ fun HomeScreenContent(
                     )
                 }
             }
+            // --- 4. MAC COMPATIBLE EVER ---
+            item(key = "header_mac") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SectionHeader(
+                        title = "Mac Deals",
+                        subtitle = "Best games compatible with macOS"
+                    )
+
+                    GameHorizontalList(
+                        deals = macDeals,
+                        favoriteIds = favoriteIds,
+                        onToggleFavorite = onToggleFavorite,
+                        storageKey = "list_mac",
+                        onCardClick = onCardClick
+                    )
+                }
+            }
+            // --- 4. LINUX COMPATIBLE EVER ---
+            item(key = "header_linux") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    SectionHeader(
+                        title = "Linux Deals",
+                        subtitle = "Native Linux compatible games"
+                    )
+
+                    GameHorizontalList(
+                        deals = linuxDeals,
+                        favoriteIds = favoriteIds,
+                        onToggleFavorite = onToggleFavorite,
+                        storageKey = "list_linux",
+                        onCardClick = onCardClick
+                    )
+                }
+            }
         }
+
 
         SnackbarHost(
             hostState = snackbarHostState,
@@ -327,6 +382,8 @@ fun HomeScreenPreview() {
             HomeScreenContent(
                 hotDeals = hotDeals,
                 lowestPriceDeals = hotDeals,
+                macDeals = hotDeals,
+                linuxDeals = hotDeals,
                 anticipatedGames = sampleGames,
                 favoriteIds = setOf("1"),
                 onToggleFavorite = {},
