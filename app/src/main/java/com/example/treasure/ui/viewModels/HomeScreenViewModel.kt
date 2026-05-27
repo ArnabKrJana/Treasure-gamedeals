@@ -39,7 +39,28 @@ class HomeScreenViewModel @Inject constructor(
         .getDealsPaged(DealCategory.LOWEST_PRICE)
         .map { pagingData -> pagingData.map { entity -> entity.toGameCardItem() } }
         .cachedIn(viewModelScope)
-    // --- 3. ANTICIPATED GAMES (CAROUSEL) ---
+
+    // --- 3. MAC DEALS STREAM ---
+    val macDeals: Flow<PagingData<GameCardItem>> = repository
+        .getDealsPaged(DealCategory.MAC_DEALS)
+        .map { pagingData ->
+            pagingData.map { entity ->
+                entity.toGameCardItem()
+            }
+        }
+        .cachedIn(viewModelScope)
+
+    // --- 4. LINUX DEALS STREAM ---
+    val linuxDeals: Flow<PagingData<GameCardItem>> = repository
+        .getDealsPaged(DealCategory.LINUX_DEALS)
+        .map { pagingData ->
+            pagingData.map { entity ->
+                entity.toGameCardItem()
+            }
+        }
+        .cachedIn(viewModelScope)
+
+    // --- 5. ANTICIPATED GAMES (CAROUSEL) ---
     private val _anticipatedGames = MutableStateFlow<List<GameCardItem>>(emptyList())
     val anticipatedGames: StateFlow<List<GameCardItem>> = _anticipatedGames.asStateFlow()
 

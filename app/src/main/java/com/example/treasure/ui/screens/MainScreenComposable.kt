@@ -261,6 +261,8 @@ fun MainScreenHomePreview() {
             HomeScreenContent(
                 hotDeals = hotDeals,
                 lowestPriceDeals = hotDeals,
+                macDeals = hotDeals,
+                linuxDeals = hotDeals,
                 favoriteIds = emptySet(),
                 onToggleFavorite = {},
                 onCardClick = {},

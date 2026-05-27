@@ -32,6 +32,12 @@ class GameRepositoryImpl @Inject constructor(
     private val dealDao = db.dealDao()
     private val userInteractionDao = db.userInteractionDao()
 
+    // Time constant: 30 minutes in milliseconds
+    private val CACHE_DURATION_MS = 30 * 60 * 1000L
+
+    private var cachedAnticipatedGames: List<GameCardItem>? = null
+    private var cacheTimestamp: Long = 0L
+
     @OptIn(ExperimentalPagingApi::class)
     override fun getDealsPaged(category: DealCategory): Flow<PagingData<DealEntity>> {
         return Pager(
@@ -48,16 +54,67 @@ class GameRepositoryImpl @Inject constructor(
         ).flow
     }
 
+//    override suspend fun getAnticipatedGames(): List<GameCardItem> = withContext(Dispatchers.IO) {
+//        val currentTime = System.currentTimeMillis()
+//
+//        if (cachedAnticipatedGames != null && (currentTime - cacheTimestamp) < 30 * 60 * 1000) {
+//            return@withContext cachedAnticipatedGames!!
+//        }
+//        try {
+//
+//            val response = treasureBackendApi.getAnticipatedGames()
+//
+//            if (response.isSuccessful && response.body() != null) {
+//                // THE FIX: We MUST access .content here to get the actual List<GameDto> out of the SpringPageResponse wrapper
+//                return@withContext response.body()!!.content.map { gameDto ->
+//                    GameCardItem(
+//                        id = gameDto.id,
+//                        listingIndex = 0, // Unused for carousel
+//                        title = gameDto.title,
+//                        thumbnail = gameDto.thumbnail ?: gameDto.screenshots?.firstOrNull() ?: "",
+//                        store = gameDto.primaryStore ?: "Multiple",
+//                        upVotes = if (gameDto.upVotes != null) UpVotes(
+//                            gameDto.upVotes,
+//                            safeColorCode(gameDto.upVoteColor)
+//                        ) else null,
+//                        price = if (gameDto.originalPrice != null && gameDto.currentPrice != null) {
+//                            Price(
+//                                originalPrice = gameDto.originalPrice,
+//                                currentPrice = gameDto.currentPrice
+//                            )
+//                        } else null,
+//                        genres = gameDto.genres ?: emptyList(),
+//                        releaseDate = gameDto.expectedReleaseDate
+//
+//                    )
+//                }
+//            }
+//            return@withContext emptyList()
+//        } catch (e: Exception) {
+//            Log.e("GameRepository", "Failed to fetch anticipated games", e)
+//            return@withContext emptyList()
+//        }
+//    }
+
     override suspend fun getAnticipatedGames(): List<GameCardItem> = withContext(Dispatchers.IO) {
+        val currentTime = System.currentTimeMillis()
+
+        // 1. Check if cache exists and is still fresh
+        if (cachedAnticipatedGames != null && (currentTime - cacheTimestamp) < CACHE_DURATION_MS) {
+            Log.d("GameRepository", "Returning cached anticipated games")
+            return@withContext cachedAnticipatedGames!!
+        }
+
+        // 2. Cache is stale or empty, fetch from server
         try {
+            Log.d("GameRepository", "Fetching fresh anticipated games from server")
             val response = treasureBackendApi.getAnticipatedGames()
 
             if (response.isSuccessful && response.body() != null) {
-                // THE FIX: We MUST access .content here to get the actual List<GameDto> out of the SpringPageResponse wrapper
-                return@withContext response.body()!!.content.map { gameDto ->
+                val freshGames = response.body()!!.content.map { gameDto ->
                     GameCardItem(
                         id = gameDto.id,
-                        listingIndex = 0, // Unused for carousel
+                        listingIndex = 0,
                         title = gameDto.title,
                         thumbnail = gameDto.thumbnail ?: gameDto.screenshots?.firstOrNull() ?: "",
                         store = gameDto.primaryStore ?: "Multiple",
@@ -73,14 +130,20 @@ class GameRepositoryImpl @Inject constructor(
                         } else null,
                         genres = gameDto.genres ?: emptyList(),
                         releaseDate = gameDto.expectedReleaseDate
-
                     )
                 }
+
+                // 3. Update cache and timestamp
+                cachedAnticipatedGames = freshGames
+                cacheTimestamp = currentTime
+
+                return@withContext freshGames
             }
             return@withContext emptyList()
         } catch (e: Exception) {
             Log.e("GameRepository", "Failed to fetch anticipated games", e)
-            return@withContext emptyList()
+            // Fallback: If network fails, return cached data even if stale, if available
+            return@withContext cachedAnticipatedGames ?: emptyList()
         }
     }
 
