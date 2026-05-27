@@ -11,53 +11,53 @@ interface TreasureBackendApi {
     // AUTHENTICATION CONTROLLER (/api/v1/auth)
     // ==========================================
 
-    @POST("api/v1/auth/{provider}")
+    @POST("auth/{provider}")
     suspend fun login(
         @Path("provider") provider: String, // e.g., "google"
         @Body request: GoogleLoginRequest
     ): Response<AuthResponse>
 
-    @POST("api/v1/auth/refresh")
+    @POST("auth/refresh")
     suspend fun refreshSession(
         @Body request: RefreshTokenRequest
     ): Response<AuthResponse>
 
-    @POST("api/v1/auth/logout")
+    @POST("auth/logout")
     suspend fun logout(
         @Body request: RefreshTokenRequest
     ): Response<MessageResponse>
 
 
     // ==========================================
-    // GAME & DEALS CONTROLLER (/api/v1/games)
+    // GAME & DEALS CONTROLLER (/games)
     // ==========================================
 
-    @GET("api/v1/games/deals")
+    @GET("games/deals")
     suspend fun getDeals(
         @Query("category") category: String,
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 40
     ): Response<SpringPageResponse<GameDto>>
 
-    @GET("api/v1/games/anticipated")
+    @GET("games/anticipated")
     suspend fun getAnticipatedGames(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 10
     ): Response<SpringPageResponse<GameDto>>
 
-    @GET("api/v1/games/platforms/{platformId}")
+    @GET("games/platforms/{platformId}")
     suspend fun getPlatformDeals(
         @Path("platformId") platformId: Int, // 2 = Mac, 3 = Linux
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 40
     ): Response<SpringPageResponse<GameDto>>
 
-    @GET("api/v1/games/search")
+    @GET("games/search")
     suspend fun searchGames(
         @Query("query") query: String
     ): Response<List<GameDto>> // Note: Backend returns a standard List here
 
-    @GET("api/v1/games/{gameId}/details")
+    @GET("games/{gameId}/details")
     suspend fun getGameDetails(
         @Path("gameId") gameId: String
     ): Response<GameDto>
@@ -67,20 +67,20 @@ interface TreasureBackendApi {
     // USER CONTROLLER (/api/v1/users)
     // ==========================================
 
-    @POST("api/v1/users/me/drive/link")
+    @POST("users/me/drive/link")
     suspend fun linkGoogleDrive(
         @Body request: DriveAccessRequest
     ): Response<DriveAccessResponse>
 
-    @DELETE("api/v1/users/me")
+    @DELETE("users/me")
     suspend fun deleteMyAccount(): Response<MessageResponse>
 
-    @POST("api/v1/users/me/drive/sync")
+    @POST("users/me/drive/sync")
     suspend fun queueDriveSync(
         @Body request: DriveSyncRequest
     ): Response<MessageResponse>
 
-    @POST("api/v1/users/me/drive/sync/status")
+    @POST("users/me/drive/sync/status")
     suspend fun checkDriveSyncStatus(
         @Body gameIds: List<String>
     ): Response<List<DriveSyncStatusResponse>>
@@ -90,15 +90,15 @@ interface TreasureBackendApi {
     // WISHLIST CONTROLLER (/api/v1/users/wishlist)
     // ==========================================
 
-    @POST("api/v1/users/wishlist/{gameId}")
+    @POST("users/wishlist/{gameId}")
     suspend fun toggleWishlist(
         @Path("gameId") gameId: String
     ): Response<String>
 
-    @GET("api/v1/users/wishlist/prices")
+    @GET("users/wishlist/prices")
     suspend fun getWishlistPrices(): Response<Map<String, String>>
 
-    @GET("api/v1/users/wishlist/detailed")
+    @GET("users/wishlist/detailed")
     suspend fun getDetailedWishlist(): Response<List<GameDto>>
 
 
