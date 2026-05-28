@@ -29,6 +29,7 @@ data class GameDto(
     val otherStores: List<StoreDeal>?,
     val categories: Set<DealCategory> = emptySet(),
     val lastEnrichedAt: String? // Mapped from backend Instant (ISO-8601 String)
+
 )
 
 data class SystemRequirement(

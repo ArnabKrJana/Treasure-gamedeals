@@ -19,8 +19,11 @@ import com.example.treasure.domain.uiModels.GameCardItem
 import com.example.treasure.domain.uiModels.Price
 import com.example.treasure.domain.uiModels.UpVotes
 import com.example.treasure.utils.ColorCode
+import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -42,9 +45,9 @@ class GameRepositoryImpl @Inject constructor(
     override fun getDealsPaged(category: DealCategory): Flow<PagingData<DealEntity>> {
         return Pager(
             config = PagingConfig(
-                pageSize = 40,
+                pageSize = 20,
                 enablePlaceholders = true,
-                prefetchDistance = 12
+                prefetchDistance = 5
             ),
             // Updated to pass the new API instead of ItadApi
             remoteMediator = DealRemoteMediator(db, treasureBackendApi, category),
@@ -249,42 +252,42 @@ class GameRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun syncWishlistFromCloud(): Unit = withContext(Dispatchers.IO) {
-        try {
-            // 1. Hit our new fast BFF endpoint
-            val response = treasureBackendApi.getDetailedWishlist()
+    @OptIn(DelicateCoroutinesApi::class)
+    override suspend fun syncWishlistFromCloud() {
+        // FIX 3: Fire-and-forget in GlobalScope so ViewModel destruction doesn't kill the sync
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val response = treasureBackendApi.getDetailedWishlist()
 
-            if (response.isSuccessful && response.body() != null) {
-                val fullGames = response.body()!!
+                if (response.isSuccessful && response.body() != null) {
+                    val fullGames = response.body()!!
 
-                // 2. Save directly into your EXISTING Room Database schema
-                db.withTransaction {
-                    // Reset all local favorites to false (preserves cart status)
-                    userInteractionDao.clearAllFavorites()
+                    db.withTransaction {
+                        userInteractionDao.clearAllFavorites()
 
-                    fullGames.forEach { dto ->
-                        // Check if the game is already in DB (e.g., in cart)
-                        val existing = userInteractionDao.getInteractionForGame(dto.id)
+                        fullGames.forEach { dto ->
+                            val existing = userInteractionDao.getInteractionForGame(dto.id)
 
-                        val newInteraction = UserInteractionEntity(
-                            gameId = dto.id,
-                            isFavorite = true, // Force true because it's from cloud wishlist
-                            isAddedToCart = existing?.isAddedToCart ?: false, // Preserve cart state
-                            timestamp = existing?.timestamp ?: System.currentTimeMillis(),
-                            title = dto.title,
-                            thumbnail = dto.thumbnail ?: dto.screenshots?.firstOrNull() ?: "",
-                            currentPrice = dto.currentPrice ?: 0.0,
-                            originalPrice = dto.originalPrice ?: 0.0,
-                            storeId = dto.primaryStore ?: "Multiple",
-                            latestSyncedPrice = dto.currentPrice ?: 0.0,
-                            lastSyncTimestamp = System.currentTimeMillis()
-                        )
-                        userInteractionDao.insertInteraction(newInteraction)
+                            val newInteraction = UserInteractionEntity(
+                                gameId = dto.id,
+                                isFavorite = true,
+                                isAddedToCart = existing?.isAddedToCart ?: false,
+                                timestamp = existing?.timestamp ?: System.currentTimeMillis(),
+                                title = dto.title,
+                                thumbnail = dto.thumbnail ?: dto.screenshots?.firstOrNull() ?: "",
+                                currentPrice = dto.currentPrice ?: 0.0,
+                                originalPrice = dto.originalPrice ?: 0.0,
+                                storeId = dto.primaryStore ?: "Multiple",
+                                latestSyncedPrice = dto.currentPrice ?: 0.0,
+                                lastSyncTimestamp = System.currentTimeMillis()
+                            )
+                            userInteractionDao.insertInteraction(newInteraction)
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                Log.e("GameRepository", "Failed to sync detailed wishlist from cloud", e)
             }
-        } catch (e: Exception) {
-            Log.e("GameRepository", "Failed to sync detailed wishlist from cloud", e)
         }
     }
 
@@ -327,7 +330,8 @@ class GameRepositoryImpl @Inject constructor(
                 this.upVotes,
                 safeColorCode(this.upVoteColor)
             ) else null,
-            genres = this.genres ?: emptyList()
+            genres = this.genres ?: emptyList(),
+            releaseDate = this.expectedReleaseDate
         )
     }
 

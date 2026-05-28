@@ -8,7 +8,7 @@ import retrofit2.http.*
 interface TreasureBackendApi {
 
     // ==========================================
-    // AUTHENTICATION CONTROLLER (/api/v1/auth)
+    // AUTHENTICATION CONTROLLER (/auth)
     // ==========================================
 
     @POST("auth/{provider}")
@@ -64,7 +64,7 @@ interface TreasureBackendApi {
 
 
     // ==========================================
-    // USER CONTROLLER (/api/v1/users)
+    // USER CONTROLLER users)
     // ==========================================
 
     @POST("users/me/drive/link")
@@ -87,15 +87,20 @@ interface TreasureBackendApi {
 
 
     // ==========================================
-    // WISHLIST CONTROLLER (/api/v1/users/wishlist)
+    // WISHLIST CONTROLLER users/wishlist)
     // ==========================================
     @GET("users/wishlist")
     suspend fun getMyWishlistIds(): Response<List<String>>
 
+//    @POST("users/wishlist/{gameId}")
+//    suspend fun toggleWishlist(
+//        @Path("gameId") gameId: String
+//    ): Response<String>
+
     @POST("users/wishlist/{gameId}")
     suspend fun toggleWishlist(
         @Path("gameId") gameId: String
-    ): Response<String>
+    ): Response<Unit>
 
     @GET("users/wishlist/prices")
     suspend fun getWishlistPrices(): Response<Map<String, String>>
