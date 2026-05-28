@@ -14,19 +14,62 @@ interface UserInteractionDao {
     @Query("SELECT * FROM user_interactions WHERE isAddedToCart = 1 ORDER BY timestamp DESC")
     fun getCartItems(): Flow<@JvmSuppressWildcards List<UserInteractionEntity>>
 
+
     @Query("SELECT * FROM user_interactions WHERE isFavorite = 1 ORDER BY timestamp DESC")
     fun getFavorites(): Flow<@JvmSuppressWildcards List<UserInteractionEntity>>
 
     @Query("SELECT gameId FROM user_interactions WHERE isFavorite = 1")
     fun getAllInteractedIds(): Flow<@JvmSuppressWildcards List<String>>
 
-    @Query("SELECT * FROM user_interactions WHERE gameId = :gameId")
-    fun getInteractionForGame(gameId: String): UserInteractionEntity?
+    // ---------------------------------------------------------
+    // The ones below DO need suspend because they are one-shot!
+    // ---------------------------------------------------------
 
-    // Returns row ID (Long) synchronously.
+
+    @Query("SELECT * FROM user_interactions WHERE gameId = :gameId")
+     fun getInteractionForGame(gameId: String): UserInteractionEntity?
+
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insertInteraction(interaction: UserInteractionEntity): Long
+     fun insertInteraction(interaction: UserInteractionEntity): Long
 
     @Query("UPDATE user_interactions SET isFavorite = 0")
-    suspend fun clearAllFavorites(): @JvmSuppressWildcards Int
+     fun clearAllFavorites(): @JvmSuppressWildcards Int
 }
+
+
+
+
+//package com.example.treasure.data.local.dao
+//
+//import androidx.room.Dao
+//import androidx.room.Insert
+//import androidx.room.OnConflictStrategy
+//import androidx.room.Query
+//import com.example.treasure.data.local.entity.UserInteractionEntity
+//import kotlinx.coroutines.flow.Flow
+//
+//@Dao
+//interface UserInteractionDao {
+//
+//
+//    @Query("SELECT * FROM user_interactions WHERE isAddedToCart = 1 ORDER BY timestamp DESC")
+//    fun getCartItems(): Flow<@JvmSuppressWildcards List<UserInteractionEntity>>
+//
+//    @Query("SELECT * FROM user_interactions WHERE isFavorite = 1 ORDER BY timestamp DESC")
+//    fun getFavorites(): Flow<@JvmSuppressWildcards List<UserInteractionEntity>>
+//
+//    @Query("SELECT gameId FROM user_interactions WHERE isFavorite = 1")
+//  suspend  fun getAllInteractedIds(): Flow<@JvmSuppressWildcards List<String>>
+//
+//    @Query("SELECT * FROM user_interactions WHERE gameId = :gameId")
+//    fun getInteractionForGame(gameId: String): UserInteractionEntity?
+//
+//    // Returns row ID (Long) synchronously.
+//    @Insert(onConflict = OnConflictStrategy.REPLACE)
+//    suspend fun insertInteraction(interaction: UserInteractionEntity): Long
+//
+//    @Query("UPDATE user_interactions SET isFavorite = 0")
+//    suspend fun clearAllFavorites(): @JvmSuppressWildcards Int
+//
+//}
