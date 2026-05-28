@@ -1,46 +1,57 @@
 package com.example.treasure.data.remote.dto
 
+import androidx.annotation.Keep
+import com.google.gson.annotations.SerializedName
 
 // --- REQUESTS ---
 
+@Keep
 data class GoogleLoginRequest(
-    val idToken: String
+    @SerializedName("idToken") val idToken: String
 )
 
+@Keep
 data class RefreshTokenRequest(
-    val refreshToken: String
+    @SerializedName("refreshToken") val refreshToken: String
 )
 
+@Keep
 data class DriveAccessRequest(
-    val serverAuthCode: String
+    @SerializedName("serverAuthCode") val serverAuthCode: String
 )
 
 // --- RESPONSES ---
 
+@Keep
 data class AuthResponse(
-    val accessToken: String,
-    val refreshToken: String,
-    val user: UserDto
+    @SerializedName("accessToken") val accessToken: String,
+    @SerializedName("refreshToken") val refreshToken: String,
+    @SerializedName("user") val user: UserDto // Mapped to UserDto!
 )
 
+@Keep
 data class MessageResponse(
-    val message: String
+    @SerializedName("message") val message: String
 )
 
+@Keep
 data class DriveAccessResponse(
-    val message: String,
-    val driveLinked: Boolean
+    @SerializedName("message") val message: String,
+    @SerializedName("driveLinked") val driveLinked: Boolean
 )
 
+@Keep
 data class UserDto(
-    val id: Long,
-    val email: String,
-    val fullName: String?,
-    val profilePicture: String?,
-    val role: Role
+    @SerializedName("id") val id: Long,
+    @SerializedName("email") val email: String,
+    @SerializedName("fullName") val fullName: String?,
+    @SerializedName("profilePicture") val profilePicture: String?,
+    @SerializedName("role") val role: Role
 )
 
-// You will need this enum on the Android side to match the backend
+// The Enum must also be protected so Gson can map "USER" or "ADMIN" strings to the object
+@Keep
 enum class Role {
-    USER, ADMIN
+    @SerializedName("USER") USER,
+    @SerializedName("ADMIN") ADMIN
 }
