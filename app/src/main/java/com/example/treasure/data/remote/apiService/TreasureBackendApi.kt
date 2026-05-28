@@ -89,6 +89,8 @@ interface TreasureBackendApi {
     // ==========================================
     // WISHLIST CONTROLLER (/api/v1/users/wishlist)
     // ==========================================
+    @GET("users/wishlist")
+    suspend fun getMyWishlistIds(): Response<List<String>>
 
     @POST("users/wishlist/{gameId}")
     suspend fun toggleWishlist(

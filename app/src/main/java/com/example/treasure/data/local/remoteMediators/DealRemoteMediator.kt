@@ -31,10 +31,12 @@ class DealRemoteMediator(
         return try {
             val pageToBeFetched = when (loadType) {
                 LoadType.REFRESH -> {
-                    val remoteKey = getRemoteKeyToTheClosestPosition(state)
+//                    val remoteKey = getRemoteKeyToTheClosestPosition(state)
                     // Spring Boot pages are 0-indexed. If no key, start at 0.
-                    remoteKey?.nextKey?.minus(1) ?: 0
+//                    remoteKey?.nextKey?.minus(1) ?: 0
+                    0
                 }
+
 
                 LoadType.PREPEND -> {
                     val remoteKey = getRemoteKeyForFirstItem(state)
