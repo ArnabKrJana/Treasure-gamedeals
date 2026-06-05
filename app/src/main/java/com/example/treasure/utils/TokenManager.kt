@@ -2,6 +2,7 @@ package com.example.treasure.utils
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -46,6 +47,7 @@ class TokenManager @Inject constructor(
     // --- TOKEN MANAGEMENT ---
 
     fun saveTokens(accessToken: String, refreshToken: String) {
+        Log.d("TOKEN_MANAGER", "Saving tokens")
         sharedPreferences.edit {
             putString(KEY_ACCESS_TOKEN, accessToken)
             putString(KEY_REFRESH_TOKEN, refreshToken)
@@ -55,7 +57,12 @@ class TokenManager @Inject constructor(
     }
 
     fun getAccessToken(): String? {
-        return sharedPreferences.getString(KEY_ACCESS_TOKEN, null)
+        val token=sharedPreferences.getString(KEY_ACCESS_TOKEN, null)
+        Log.d(
+            "TOKEN_MANAGER",
+            "getAccessToken null=${token == null}"
+        )
+        return token
     }
 
     fun getRefreshToken(): String? {
@@ -87,6 +94,10 @@ class TokenManager @Inject constructor(
      * Call this on Logout or when a Refresh Token expires.
      */
     fun clearSession() {
+        Log.e(
+            "TOKEN_MANAGER",
+            "SESSION CLEARED"
+        )
         sharedPreferences.edit { clear() }
         // Broadcast that the session is dead (Triggers the Eject Seat!)
         _isSessionActive.value = false
