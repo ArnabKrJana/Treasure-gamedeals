@@ -1,5 +1,6 @@
 package com.example.treasure.data.remote.apiService
 
+import android.util.Log
 import com.example.treasure.data.remote.dto.RefreshTokenRequest
 import com.example.treasure.utils.TokenManager
 import kotlinx.coroutines.runBlocking
@@ -17,6 +18,10 @@ class TokenAuthenticator @Inject constructor(
 ) : Authenticator {
 
     override fun authenticate(route: Route?, response: Response): Request? {
+        Log.e(
+            "TOKEN_AUTH",
+            "Authenticator triggered for ${response.request.url}"
+        )
         // 1. Prevent infinite loops if the refresh endpoint itself returns a 401
         if (response.request.url.encodedPath.contains("auth/refresh")) {
             tokenManager.clearSession()
@@ -24,8 +29,18 @@ class TokenAuthenticator @Inject constructor(
         }
 
         // 2. Grab the refresh token. If we don't have one, we can't refresh.
-        val refreshToken = tokenManager.getRefreshToken() ?: return null
-
+        val refreshToken = tokenManager.getRefreshToken()
+        if (refreshToken == null) {
+            Log.e(
+                "TOKEN_AUTH",
+                "Refresh token missing"
+            )
+            return null
+        }
+        Log.d(
+            "TOKEN_AUTH",
+            "Refresh token exists=${refreshToken != null}"
+        )
         // 3. Synchronize to prevent multiple parallel network calls from triggering multiple refreshes
         return synchronized(this) {
             // Double-check if another thread already refreshed the token while this thread was waiting
@@ -38,15 +53,24 @@ class TokenAuthenticator @Inject constructor(
 
             // 4. Make the network call to Spring Boot
             try {
+
                 val refreshRequest = RefreshTokenRequest(refreshToken)
 
                 // RunBlocking is required here because OkHttp Interceptors are synchronous,
                 // but our Retrofit interface uses suspend functions.
                 val refreshResponse = runBlocking {
+                    Log.d(
+                        "TOKEN_AUTH",
+                        "Calling refresh endpoint"
+                    )
                     apiProvider.get().refreshSession(refreshRequest)
                 }
 
                 if (refreshResponse.isSuccessful && refreshResponse.body() != null) {
+                    Log.d(
+                        "TOKEN_AUTH",
+                        "Refresh success"
+                    )
                     val newTokens = refreshResponse.body()!!
 
                     // Save the brand new tokens
@@ -60,12 +84,21 @@ class TokenAuthenticator @Inject constructor(
                         .header("Authorization", "Bearer ${newTokens.accessToken}")
                         .build()
                 } else {
+                    Log.e(
+                        "TOKEN_AUTH",
+                        "Refresh failed. Code=${refreshResponse.code()}"
+                    )
                     // The refresh token itself is expired or revoked. Forced Logout.
                     tokenManager.clearSession()
                     null
                 }
             } catch (e: Exception) {
-                // Network failure during refresh. Clear session to be safe.
+
+                Log.e(
+                    "TOKEN_AUTH",
+                    "Refresh exception",
+                    e
+                )
                 tokenManager.clearSession()
                 null
             }

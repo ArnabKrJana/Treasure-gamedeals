@@ -3,6 +3,7 @@ package com.example.treasure.di.apiModule
 
 import com.example.treasure.BuildConfig
 import com.example.treasure.data.remote.apiService.AuthInterceptor
+import com.example.treasure.data.remote.apiService.RateLimitInterceptor
 import com.example.treasure.data.remote.apiService.TokenAuthenticator
 import com.example.treasure.data.remote.apiService.TreasureBackendApi
 import com.example.treasure.utils.Constants
@@ -32,7 +33,8 @@ object NetworkModule {
     @Singleton
     fun provideHttpClient(
         authInterceptor: AuthInterceptor,
-        tokenAuthenticator: TokenAuthenticator
+        tokenAuthenticator: TokenAuthenticator,
+        rateLimitInterceptor: RateLimitInterceptor
     ): OkHttpClient {
 //        val logging = HttpLoggingInterceptor().apply {
 //            level = HttpLoggingInterceptor.Level.BODY
@@ -49,6 +51,7 @@ object NetworkModule {
             .readTimeout(15, TimeUnit.SECONDS)
             .connectTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
+            .addInterceptor(rateLimitInterceptor)
             .addInterceptor(logging)
             .authenticator(tokenAuthenticator)
             .build()
@@ -69,4 +72,5 @@ object NetworkModule {
     fun provideTreasureBackendApi(retrofit: Retrofit): TreasureBackendApi {
         return retrofit.create(TreasureBackendApi::class.java)
     }
+
 }
