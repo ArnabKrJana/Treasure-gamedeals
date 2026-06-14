@@ -10,6 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.TrendingDown
@@ -55,8 +56,6 @@ fun SettingScreen(
     )
 }
 
-@Suppress("DEPRECATION")
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingScreenContent(
     state: SettingsUiState,
@@ -92,19 +91,14 @@ fun SettingScreenContent(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("Settings", fontWeight = FontWeight.Bold) })
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-        ) {
-            SettingsSectionTitle("Appearance")
-
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        SettingsSectionCard(title = "Appearance") {
             SettingsClickableItem(
                 title = "App Theme",
                 subtitle = state.theme.name.lowercase().replaceFirstChar { it.uppercase() },
@@ -119,11 +113,9 @@ fun SettingScreenContent(
                 checked = state.dynamicColors,
                 onCheckedChange = onDynamicColorChange
             )
+        }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            SettingsSectionTitle("Cloud Sync")
-
+        SettingsSectionCard(title = "Cloud Sync") {
             SettingsClickableItem(
                 title = "Google Drive",
                 subtitle = if (state.isDriveLinked) "Connected. Tap to disconnect." else "Not connected. Tap to link.",
@@ -136,11 +128,9 @@ fun SettingScreenContent(
                     }
                 }
             )
+        }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            SettingsSectionTitle("Wishlist Alerts")
-
+        SettingsSectionCard(title = "Wishlist Alerts") {
             SettingsSwitchItem(
                 title = "Price Drop Notifications",
                 subtitle = "Get alerted when wishlist games go on sale",
@@ -164,31 +154,27 @@ fun SettingScreenContent(
                     onClick = { showThresholdDialog = true }
                 )
             }
+        }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            SettingsSectionTitle("Data & Storage")
-
+        SettingsSectionCard(title = "Data & Storage") {
             SettingsClickableItem(
                 title = "Clear Image Cache",
                 subtitle = "Free up space by deleting cached thumbnails",
                 icon = Icons.Outlined.DeleteOutline,
                 onClick = onClearCache
             )
+        }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-            SettingsSectionTitle("About")
-
+        SettingsSectionCard(title = "About") {
             SettingsClickableItem(
                 title = "Version",
                 subtitle = state.version,
                 icon = Icons.Outlined.Info,
                 onClick = { /* Do nothing */ }
             )
-
-            Spacer(modifier = Modifier.height(32.dp))
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 
     if (showUnlinkDialog) {
@@ -260,6 +246,30 @@ fun getDriveSyncSettingsIntent(context: Context): Intent {
 }
 
 @Composable
+fun SettingsSectionCard(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(content = content)
+        }
+    }
+}
+
+@Composable
 fun SettingsSectionTitle(title: String) {
     Text(
         text = title,
@@ -286,7 +296,7 @@ fun SettingsClickableItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -318,7 +328,7 @@ fun SettingsSwitchItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
