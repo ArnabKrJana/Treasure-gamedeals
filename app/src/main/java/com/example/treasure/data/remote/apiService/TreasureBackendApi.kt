@@ -1,7 +1,7 @@
 package com.example.treasure.data.remote.apiService
 
-
 import com.example.treasure.data.remote.dto.*
+import retrofit2.Call
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -21,6 +21,11 @@ interface TreasureBackendApi {
     suspend fun refreshSession(
         @Body request: RefreshTokenRequest
     ): Response<AuthResponse>
+
+    @POST("auth/refresh")
+    fun refreshSessionSync(
+        @Body request: RefreshTokenRequest
+    ): Call<AuthResponse>
 
     @POST("auth/logout")
     suspend fun logout(
@@ -64,7 +69,7 @@ interface TreasureBackendApi {
 
 
     // ==========================================
-    // USER CONTROLLER users)
+    // USER CONTROLLER (/users)
     // ==========================================
 
     @POST("users/me/drive/link")
@@ -87,15 +92,10 @@ interface TreasureBackendApi {
 
 
     // ==========================================
-    // WISHLIST CONTROLLER users/wishlist)
+    // WISHLIST CONTROLLER (/users/wishlist)
     // ==========================================
     @GET("users/wishlist")
     suspend fun getMyWishlistIds(): Response<List<String>>
-
-//    @POST("users/wishlist/{gameId}")
-//    suspend fun toggleWishlist(
-//        @Path("gameId") gameId: String
-//    ): Response<String>
 
     @POST("users/wishlist/{gameId}")
     suspend fun toggleWishlist(
@@ -107,6 +107,4 @@ interface TreasureBackendApi {
 
     @GET("users/wishlist/detailed")
     suspend fun getDetailedWishlist(): Response<List<GameDto>>
-
-
 }

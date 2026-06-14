@@ -52,55 +52,40 @@ class TokenAuthenticator @Inject constructor(
             }
 
             // 4. Make the network call to Spring Boot
+            // 4. Make the network call to Spring Boot
             try {
-
                 val refreshRequest = RefreshTokenRequest(refreshToken)
 
-                // RunBlocking is required here because OkHttp Interceptors are synchronous,
-                // but our Retrofit interface uses suspend functions.
-                val refreshResponse = runBlocking {
-                    Log.d(
-                        "TOKEN_AUTH",
-                        "Calling refresh endpoint"
-                    )
-                    apiProvider.get().refreshSession(refreshRequest)
-                }
+                Log.d("TOKEN_AUTH", "Calling refresh endpoint synchronously")
+
+                //  THE FIX: Use .execute() instead of runBlocking
+                val refreshResponse = apiProvider.get().refreshSessionSync(refreshRequest).execute()
 
                 if (refreshResponse.isSuccessful && refreshResponse.body() != null) {
-                    Log.d(
-                        "TOKEN_AUTH",
-                        "Refresh success"
-                    )
+                    Log.d("TOKEN_AUTH", "Refresh success")
                     val newTokens = refreshResponse.body()!!
 
-                    // Save the brand new tokens
-                    tokenManager.saveTokens(
-                        accessToken = newTokens.accessToken,
-                        refreshToken = newTokens.refreshToken
-                    )
+                    // Note: Local storage saves can still use runBlocking safely
+                    runBlocking {
+                        tokenManager.saveTokens(
+                            accessToken = newTokens.accessToken,
+                            refreshToken = newTokens.refreshToken
+                        )
+                    }
 
                     // Retry the original failed request with the new access token!
-                    response.request.newBuilder()
+                    return@synchronized response.request.newBuilder()
                         .header("Authorization", "Bearer ${newTokens.accessToken}")
                         .build()
                 } else {
-                    Log.e(
-                        "TOKEN_AUTH",
-                        "Refresh failed. Code=${refreshResponse.code()}"
-                    )
-                    // The refresh token itself is expired or revoked. Forced Logout.
-                    tokenManager.clearSession()
-                    null
+                    Log.e("TOKEN_AUTH", "Refresh failed. Code=${refreshResponse.code()}")
+                    runBlocking { tokenManager.clearSession() }
+                    return@synchronized null
                 }
             } catch (e: Exception) {
-
-                Log.e(
-                    "TOKEN_AUTH",
-                    "Refresh exception",
-                    e
-                )
-                tokenManager.clearSession()
-                null
+                Log.e("TOKEN_AUTH", "Refresh exception", e)
+                runBlocking { tokenManager.clearSession() }
+                return@synchronized null
             }
         }
     }

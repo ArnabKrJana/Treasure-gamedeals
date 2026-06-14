@@ -176,7 +176,7 @@ fun WelcomeScreenContent(
                 Text(
                     text = "TREASURE",
                     color = Color.White,
-                    fontSize = 42.sp,
+                    fontSize = 36.sp,
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 4.sp,
                     modifier = Modifier.padding(bottom = 32.dp)

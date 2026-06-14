@@ -4,8 +4,10 @@ import com.example.treasure.data.remote.auth.googleAuthHelper.GoogleAuthHelper
 import com.example.treasure.data.remote.auth.googleAuthHelper.GoogleAuthHelperImpl
 import com.example.treasure.data.repositoryImpl.AuthRepositoryImpl
 import com.example.treasure.data.repositoryImpl.GameRepositoryImpl
+import com.example.treasure.data.repositoryImpl.LocalDownloadRepositoryImpl
 import com.example.treasure.domain.repository.AuthRepository
 import com.example.treasure.domain.repository.GameRepository
+import com.example.treasure.domain.repository.LocalDownloadRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -29,5 +31,9 @@ abstract class RepositoryModule {
         googleAuthHelperImpl: GoogleAuthHelperImpl
     ): GoogleAuthHelper
 
-
+    @Binds
+    @Singleton
+    abstract fun bindLocalDownloadRepository(
+        localDownloadRepositoryImpl: LocalDownloadRepositoryImpl
+    ): LocalDownloadRepository
 }

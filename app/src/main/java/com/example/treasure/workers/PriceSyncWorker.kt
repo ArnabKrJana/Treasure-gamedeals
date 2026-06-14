@@ -31,7 +31,7 @@ class PriceSyncWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
     private val database: TreasureDatabase,
-    private val treasureBackendApi: TreasureBackendApi, // Swapped ItadApi for BFF
+    private val treasureBackendApi: TreasureBackendApi,
     private val settingsRepository: SettingsRepository
 ) : CoroutineWorker(appContext, workerParams) {
 
