@@ -2,9 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.INTERNET" />
 
-    <attribution android:tag="media_player" android:label="@string/app_name" />
+    <attribution
+        android:label="@string/app_name"
+        android:tag="media_player" />
+
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -18,9 +21,14 @@
         android:roundIcon="@mipmap/app_icon"
         android:supportsRtl="true"
         android:theme="@style/Theme.Treasure"
-        android:usesCleartextTraffic="true"
-        >
-
+        android:usesCleartextTraffic="true">
+        <receiver
+            android:name=".data.receiver.DownloadCompleteReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
@@ -44,9 +52,13 @@
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
+
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="treasure" android:host="wishlist" />
+
+                <data
+                    android:host="wishlist"
+                    android:scheme="treasure" />
             </intent-filter>
         </activity>
     </application>

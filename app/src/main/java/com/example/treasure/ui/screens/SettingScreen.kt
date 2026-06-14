@@ -1,27 +1,40 @@
+
+
 package com.example.treasure.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.TrendingDown
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.treasure.data.repositoryImpl.AppTheme
 import com.example.treasure.ui.viewModels.SettingsUiState
 import com.example.treasure.ui.viewModels.SettingsViewModel
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.treasure.ui.theme.TreasureTheme
+import com.example.treasure.utils.Constants.WEB_CLIENT_ID
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.Scope
 
-// 1. Stateful Composable (Injects ViewModel)
 @Composable
 fun SettingScreen(
     viewModel: SettingsViewModel = hiltViewModel()
@@ -35,11 +48,15 @@ fun SettingScreen(
         onNotificationChange = viewModel::toggleNotifications,
         onSyncFrequencyChange = viewModel::updateSyncFrequency,
         onThresholdChange = viewModel::updateNotifyThreshold,
-        onClearCache = viewModel::clearImageCache
+        onClearCache = viewModel::clearImageCache,
+        onLinkDrive = viewModel::linkDriveAccount,
+        onUnlinkDrive = viewModel::unlinkDrive,
+        onAuthFailed = viewModel::setDriveNeedsAuth
     )
 }
 
-// 2. Stateless Composable (Pure UI - Works in Preview)
+@Suppress("DEPRECATION")
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingScreenContent(
     state: SettingsUiState,
@@ -48,212 +65,236 @@ fun SettingScreenContent(
     onNotificationChange: (Boolean) -> Unit,
     onSyncFrequencyChange: (Int) -> Unit,
     onThresholdChange: (Int) -> Unit,
-    onClearCache: () -> Unit
+    onClearCache: () -> Unit,
+    onLinkDrive: (String) -> Unit,
+    onUnlinkDrive: () -> Unit,
+    onAuthFailed: () -> Unit
 ) {
-    val scrollState = rememberScrollState()
-
-    // --- STATE VARIABLES MOVED HERE ---
+    val context = LocalContext.current
     var showThemeDialog by remember { mutableStateOf(false) }
-    var showSyncDialog by remember { mutableStateOf(false) }
+    var showFrequencyDialog by remember { mutableStateOf(false) }
     var showThresholdDialog by remember { mutableStateOf(false) }
+    var showUnlinkDialog by remember { mutableStateOf(false) }
+
+    val driveAuthLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+                account?.serverAuthCode?.let { code -> onLinkDrive(code) } ?: onAuthFailed()
+            } catch (_: ApiException) {
+                onAuthFailed()
+            }
+        } else {
+            onAuthFailed()
+        }
+    }
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { padding ->
+        topBar = {
+            TopAppBar(title = { Text("Settings", fontWeight = FontWeight.Bold) })
+        }
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(scrollState)
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
         ) {
-//            Text(
-//                text = "Settings",
-//                style = MaterialTheme.typography.headlineMedium,
-//                fontWeight = FontWeight.Bold,
-//                modifier = Modifier.padding(16.dp)
-//            )
-
             SettingsSectionTitle("Appearance")
 
-            SettingsItem(
-                icon = Icons.Outlined.DarkMode,
+            SettingsClickableItem(
                 title = "App Theme",
-                subtitle = state.theme.label,
+                subtitle = state.theme.name.lowercase().replaceFirstChar { it.uppercase() },
+                icon = Icons.Outlined.Palette,
                 onClick = { showThemeDialog = true }
             )
 
             SettingsSwitchItem(
-                icon = Icons.Outlined.Palette,
                 title = "Dynamic Colors",
-                subtitle = "Use game art for card backgrounds",
+                subtitle = "Use system wallpaper colors (Android 12+)",
+                icon = Icons.Outlined.FormatPaint,
                 checked = state.dynamicColors,
                 onCheckedChange = onDynamicColorChange
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            SettingsSectionTitle("Notifications & Sync")
+            SettingsSectionTitle("Cloud Sync")
 
-            SettingsSwitchItem(
-                icon = Icons.Outlined.Notifications,
-                title = "Price Alerts",
-                subtitle = "Get notified when prices drop",
-                checked = state.notificationsEnabled,
-                onCheckedChange = onNotificationChange
-            )
-
-            SettingsItem(
-                icon = Icons.Outlined.Sync,
-                title = "Sync Frequency",
-                subtitle = "Every ${state.syncFrequency} hours",
-                enabled = state.notificationsEnabled,
-                onClick = { showSyncDialog = true }
-            )
-
-            SettingsItem(
-                icon = Icons.Outlined.TrendingDown,
-                title = "Notify Threshold",
-                subtitle = "Price drop > ${state.notifyThreshold}%",
-                enabled = state.notificationsEnabled,
-                onClick = { showThresholdDialog = true }
+            SettingsClickableItem(
+                title = "Google Drive",
+                subtitle = if (state.isDriveLinked) "Connected. Tap to disconnect." else "Not connected. Tap to link.",
+                icon = if (state.isDriveLinked) Icons.Outlined.CloudDone else Icons.Outlined.CloudOff,
+                onClick = {
+                    if (state.isDriveLinked) {
+                        showUnlinkDialog = true
+                    } else {
+                        driveAuthLauncher.launch(getDriveSyncSettingsIntent(context))
+                    }
+                }
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            SettingsSectionTitle("System & Data")
+            SettingsSectionTitle("Wishlist Alerts")
 
-            SettingsItem(
-                icon = Icons.Outlined.Public,
-                title = "Store Region",
-                subtitle = "India (IN)",
-                enabled = false,
-                onClick = {}
+            SettingsSwitchItem(
+                title = "Price Drop Notifications",
+                subtitle = "Get alerted when wishlist games go on sale",
+                icon = Icons.Outlined.Notifications,
+                checked = state.notificationsEnabled,
+                onCheckedChange = onNotificationChange
             )
 
-            SettingsItem(
-                icon = Icons.Outlined.CleaningServices,
+            if (state.notificationsEnabled) {
+                SettingsClickableItem(
+                    title = "Sync Frequency",
+                    subtitle = "Check for prices every ${state.syncFrequency} hours",
+                    icon = Icons.Outlined.Sync,
+                    onClick = { showFrequencyDialog = true }
+                )
+
+                SettingsClickableItem(
+                    title = "Notification Threshold",
+                    subtitle = "Only alert me if price drops by at least ${state.notifyThreshold}%",
+                    icon = Icons.AutoMirrored.Outlined.TrendingDown,
+                    onClick = { showThresholdDialog = true }
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            SettingsSectionTitle("Data & Storage")
+
+            SettingsClickableItem(
                 title = "Clear Image Cache",
-                subtitle = "Free up storage space",
+                subtitle = "Free up space by deleting cached thumbnails",
+                icon = Icons.Outlined.DeleteOutline,
                 onClick = onClearCache
             )
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "App Version ${state.version}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            SettingsSectionTitle("About")
+
+            SettingsClickableItem(
+                title = "Version",
+                subtitle = state.version,
+                icon = Icons.Outlined.Info,
+                onClick = { /* Do nothing */ }
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 
-    // --- DIALOGS ---
-    if (showThemeDialog) {
-        SelectionDialog(
-            title = "Choose Theme",
-            options = AppTheme.entries.toList(),
-            selectedOption = state.theme,
-            onOptionSelected = onThemeChange,
-            onDismiss = { showThemeDialog = false },
-            labelProvider = { it.label }
+    if (showUnlinkDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnlinkDialog = false },
+            title = { Text("Disconnect Google Drive?") },
+            text = { Text("Your wallpapers will no longer sync to the cloud. You can reconnect at any time from this menu.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onUnlinkDrive()
+                    showUnlinkDialog = false
+                }) { Text("Disconnect", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUnlinkDialog = false }) { Text("Cancel") }
+            }
         )
     }
 
-    if (showSyncDialog) {
-        val frequencies = listOf(4, 8, 12, 24)
+    if (showThemeDialog) {
+        val themeOptions = AppTheme.entries
+
+        SelectionDialog(
+            title = "Choose Theme",
+            options = themeOptions,
+            selectedOption = state.theme,
+            onOptionSelected = onThemeChange,
+            onDismiss = { showThemeDialog = false },
+            labelProvider = { it.name.lowercase().replaceFirstChar { char -> char.uppercase() } }
+        )
+    }
+
+    if (showFrequencyDialog) {
         SelectionDialog(
             title = "Sync Frequency",
-            options = frequencies,
+            options = listOf(4, 8, 12, 24),
             selectedOption = state.syncFrequency,
             onOptionSelected = onSyncFrequencyChange,
-            onDismiss = { showSyncDialog = false },
+            onDismiss = { showFrequencyDialog = false },
             labelProvider = { "Every $it hours" }
         )
     }
 
     if (showThresholdDialog) {
-        val thresholds = listOf(1, 3, 5, 10, 20, 50)
         SelectionDialog(
-            title = "Notification Threshold",
-            options = thresholds,
+            title = "Alert Threshold",
+            options = listOf(1, 3, 5, 10, 20),
             selectedOption = state.notifyThreshold,
             onOptionSelected = onThresholdChange,
             onDismiss = { showThresholdDialog = false },
-            labelProvider = { "Drop > $it%" }
+            labelProvider = { "Drop of $it% or more" }
         )
     }
 }
 
-// --- PREVIEW ---
-@Preview(showBackground = true)
-@Composable
-fun SettingScreenPreview() {
-    SettingScreenContent(
-        state = SettingsUiState(
-            theme = AppTheme.SYSTEM,
-            dynamicColors = true,
-            notificationsEnabled = true,
-            syncFrequency = 8,
-            notifyThreshold = 5
-        ),
-        onThemeChange = {},
-        onDynamicColorChange = {},
-        onNotificationChange = {},
-        onSyncFrequencyChange = {},
-        onThresholdChange = {},
-        onClearCache = {}
-    )
+@Suppress("DEPRECATION")
+fun getDriveSyncSettingsIntent(context: Context): Intent {
+    val webClientId = WEB_CLIENT_ID
+
+    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        .requestEmail()
+        .requestScopes(Scope("https://www.googleapis.com/auth/drive.file"))
+        .requestServerAuthCode(webClientId, true)
+        .build()
+
+    val client = GoogleSignIn.getClient(context, gso)
+//    client.signOut()
+    return client.signInIntent
 }
 
-// --- HELPER COMPOSABLES (Keep these at the bottom of the file) ---
 @Composable
 fun SettingsSectionTitle(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp, end = 16.dp)
     )
 }
 
 @Composable
-fun SettingsItem(
-    icon: ImageVector,
+fun SettingsClickableItem(
     title: String,
     subtitle: String,
-    enabled: Boolean = true,
+    icon: ImageVector,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (enabled) MaterialTheme.colorScheme.onSurface else Color.Gray.copy(alpha = 0.5f),
-            modifier = Modifier.size(24.dp)
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (enabled) MaterialTheme.colorScheme.onSurface else Color.Gray
-            )
+            Text(text = title, style = MaterialTheme.typography.bodyLarge)
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else Color.Gray.copy(alpha = 0.5f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -261,9 +302,9 @@ fun SettingsItem(
 
 @Composable
 fun SettingsSwitchItem(
-    icon: ImageVector,
     title: String,
     subtitle: String,
+    icon: ImageVector,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
@@ -277,8 +318,7 @@ fun SettingsSwitchItem(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(24.dp)
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -332,4 +372,31 @@ fun <T> SelectionDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+}
+
+@Preview(showBackground = true)
+@Composable
+fun SettingScreenPreview() {
+    TreasureTheme {
+        SettingScreenContent(
+            state = SettingsUiState(
+                theme = AppTheme.SYSTEM,
+                dynamicColors = true,
+                notificationsEnabled = true,
+                syncFrequency = 8,
+                notifyThreshold = 3,
+                version = "1.0.0",
+                isDriveLinked = false
+            ),
+            onThemeChange = {},
+            onDynamicColorChange = {},
+            onNotificationChange = {},
+            onSyncFrequencyChange = {},
+            onThresholdChange = {},
+            onClearCache = {},
+            onLinkDrive = {},
+            onUnlinkDrive = {},
+            onAuthFailed = {}
+        )
+    }
 }

@@ -18,6 +18,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import okhttp3.Dispatcher
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -47,9 +48,14 @@ object NetworkModule {
                     HttpLoggingInterceptor.Level.NONE
                 }
         }
+        val customDispatcher = Dispatcher().apply {
+            maxRequests = 64
+            maxRequestsPerHost = 20 // Must be higher than 5 to prevent deadlocks!
+        }
         return OkHttpClient.Builder()
-            .readTimeout(15, TimeUnit.SECONDS)
-            .connectTimeout(15, TimeUnit.SECONDS)
+            .dispatcher(customDispatcher)
+            .readTimeout(25, TimeUnit.SECONDS)
+            .connectTimeout(25, TimeUnit.SECONDS)
             .addInterceptor(authInterceptor)
             .addInterceptor(rateLimitInterceptor)
             .addInterceptor(logging)

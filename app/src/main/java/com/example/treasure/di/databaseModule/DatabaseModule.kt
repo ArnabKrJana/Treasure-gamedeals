@@ -3,6 +3,7 @@ package com.example.treasure.di.databaseModule
 import android.content.Context
 import androidx.room.Room
 import com.example.treasure.data.local.TreasureDatabase
+import com.example.treasure.data.local.dao.DownloadedAssetDao
 import com.example.treasure.utils.Constants.DATABASE_NAME
 import dagger.Module
 import dagger.Provides
@@ -23,6 +24,11 @@ object DatabaseModule {
             context,
             TreasureDatabase::class.java,
             DATABASE_NAME
-        ).fallbackToDestructiveMigration()
+        ).fallbackToDestructiveMigration(false)
             .build()
+
+    @Provides
+    @Singleton
+    fun provideDownloadedAssetDao(database: TreasureDatabase): DownloadedAssetDao =
+        database.downloadedAssetDao()
 }

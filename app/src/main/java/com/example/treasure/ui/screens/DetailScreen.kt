@@ -1,5 +1,11 @@
 package com.example.treasure.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -13,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -27,8 +34,11 @@ import com.example.treasure.ui.theme.TreasureTheme
 import com.example.treasure.ui.uiComponents.*
 import com.example.treasure.ui.viewModels.DetailViewModel
 import com.example.treasure.ui.uiComponents.ActionStatus
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import com.example.treasure.utils.Constants.WEB_CLIENT_ID
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.Scope
 
 @Composable
 fun DetailScreen(
@@ -36,13 +46,57 @@ fun DetailScreen(
 ) {
     val gameDetail by viewModel.gameDetail.collectAsStateWithLifecycle()
 
-    val wishlistItems by viewModel.repository.getWishlistItems().collectAsState(initial = emptyList())
+    val wishlistItems by viewModel.repository.getWishlistItems()
+        .collectAsState(initial = emptyList())
     val isFavorite = wishlistItems.any { it.gameId == gameDetail?.id }
+
+    // --- 1. Collect the dynamically updating state maps ---
+    val downloadStatuses by viewModel.downloadStatuses.collectAsStateWithLifecycle()
+    val uploadStatuses by viewModel.uploadStatuses.collectAsStateWithLifecycle()
+
+    // --- 2. Google Drive Authorization Flow ---
+    val context = LocalContext.current
+    var pendingImageUrl by remember { mutableStateOf<String?>(null) }
+
+    val driveAuthLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(ApiException::class.java)
+
+                Log.d("DRIVE_AUTH", "Email=${account.email}")
+                Log.d("DRIVE_AUTH", "AuthCode=${account.serverAuthCode}")
+
+                account?.serverAuthCode?.let { code ->
+                    viewModel.linkDriveAccount(code, pendingImageUrl)
+                }
+            } catch (e: ApiException) {
+                Log.e("DRIVE_AUTH", "Auth failed", e)
+            }
+        }
+        pendingImageUrl = null // Clear the pending image after attempting auth
+    }
+
+    // Listens for the ViewModel saying "Hey, the user isn't linked to Drive yet!"
+    LaunchedEffect(Unit) {
+        viewModel.driveAuthEvent.collect {
+            driveAuthLauncher.launch(getDriveSyncIntent(context))
+        }
+    }
 
     DetailScreenContent(
         gameDetail = gameDetail,
         isFavorite = isFavorite,
-        onToggleFavorite = { gameDetail?.let { viewModel.toggleFavorite(it) } }
+        onToggleFavorite = { gameDetail?.let { viewModel.toggleFavorite(it) } },
+        downloadStatuses = downloadStatuses,
+        uploadStatuses = uploadStatuses,
+        onDownloadLocalClick = { url -> viewModel.downloadWallpaperLocal(url) },
+        onDriveSyncClick = { url ->
+            pendingImageUrl = url
+            viewModel.initiateDriveSync(url)
+        }
     )
 }
 
@@ -51,15 +105,14 @@ fun DetailScreenContent(
     gameDetail: DealEntity?,
     isFavorite: Boolean = false,
     onToggleFavorite: () -> Unit = {},
+    downloadStatuses: Map<String, ActionStatus> = emptyMap(),
+    uploadStatuses: Map<String, ActionStatus> = emptyMap(),
+    onDownloadLocalClick: (String) -> Unit = {},
+    onDriveSyncClick: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedScreenshotIndex by remember { mutableStateOf<Int?>(null) }
     var showVideoPlayer by rememberSaveable { mutableStateOf(false) }
-
-    // --- State Maps for Tracking Action Statuses ---
-    val downloadStatuses = remember { mutableStateMapOf<String, ActionStatus>() }
-    val uploadStatuses = remember { mutableStateMapOf<String, ActionStatus>() }
-    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
         contentWindowInsets = WindowInsets.navigationBars,
@@ -79,7 +132,12 @@ fun DetailScreenContent(
             }
         }
     ) { padding ->
-        Box(modifier = modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.surface)) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(padding)
+                .background(MaterialTheme.colorScheme.surface)
+        ) {
             if (gameDetail == null) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else {
@@ -104,13 +162,34 @@ fun DetailScreenContent(
                         )
 
                         // 2. Info Rows
-                        DetailInfoRow(stringResource(R.string.genre_label), gameDetail.genres?.joinToString(", ") ?: "N/A")
-                        DetailInfoRow(stringResource(R.string.developer_label), gameDetail.developer ?: "N/A")
-                        DetailInfoRow(stringResource(R.string.publisher_label), gameDetail.publisher ?: "N/A")
-                        DetailInfoRow(stringResource(R.string.franchise_label), gameDetail.franchise ?: "N/A")
-                        DetailInfoRow(stringResource(R.string.release_date_label), gameDetail.releaseDate ?: "N/A")
-                        DetailInfoRow(stringResource(R.string.age_rating_label), gameDetail.maturityRating ?: "N/A")
-                        DetailInfoRow(stringResource(R.string.reviews_label), gameDetail.upVotes ?: "N/A")
+                        DetailInfoRow(
+                            stringResource(R.string.genre_label),
+                            gameDetail.genres?.joinToString(", ") ?: "N/A"
+                        )
+                        DetailInfoRow(
+                            stringResource(R.string.developer_label),
+                            gameDetail.developer ?: "N/A"
+                        )
+                        DetailInfoRow(
+                            stringResource(R.string.publisher_label),
+                            gameDetail.publisher ?: "N/A"
+                        )
+                        DetailInfoRow(
+                            stringResource(R.string.franchise_label),
+                            gameDetail.franchise ?: "N/A"
+                        )
+                        DetailInfoRow(
+                            stringResource(R.string.release_date_label),
+                            gameDetail.releaseDate ?: "N/A"
+                        )
+                        DetailInfoRow(
+                            stringResource(R.string.age_rating_label),
+                            gameDetail.maturityRating ?: "N/A"
+                        )
+                        DetailInfoRow(
+                            stringResource(R.string.reviews_label),
+                            gameDetail.upVotes ?: "N/A"
+                        )
 
                         Text(
                             text = stringResource(R.string.description_label),
@@ -136,7 +215,8 @@ fun DetailScreenContent(
 
                         // 5. System Requirements
                         SystemRequirementsSection(
-                            currentStore = gameDetail.storeId.replaceFirstChar { it.uppercase() },
+                            currentStore = gameDetail.storeId?.replaceFirstChar { it.uppercase() }
+                                ?: "Store",
                             currentPrice = Price(gameDetail.originalPrice, gameDetail.currentPrice),
                             dealUrl = "https://store.steampowered.com/app/${gameDetail.id}",
                             otherStores = gameDetail.otherStores ?: emptyList(),
@@ -152,25 +232,11 @@ fun DetailScreenContent(
                 FullScreenImageOverlay(
                     screenshots = gameDetail?.screenshots ?: emptyList(),
                     initialIndex = index,
-                    downloadStatuses = downloadStatuses, // Pass map
-                    uploadStatuses = uploadStatuses,     // Pass map
+                    downloadStatuses = downloadStatuses, // Supplied directly by ViewModel Map
+                    uploadStatuses = uploadStatuses,     // Supplied directly by ViewModel Map
                     onDismiss = { selectedScreenshotIndex = null },
-                    onDownloadLocalClick = { url ->
-                        // Simulate Download Flow (Move this to ViewModel later!)
-                        downloadStatuses[url] = ActionStatus.LOADING
-                        coroutineScope.launch {
-                            delay(1500) // Pretend we are downloading
-                            downloadStatuses[url] = ActionStatus.SUCCESS
-                        }
-                    },
-                    onDriveSyncClick = { url ->
-                        // Simulate Drive Sync Flow (Move this to ViewModel later!)
-                        uploadStatuses[url] = ActionStatus.LOADING
-                        coroutineScope.launch {
-                            delay(1500) // Pretend we are syncing to treasure-backend
-                            uploadStatuses[url] = ActionStatus.SUCCESS
-                        }
-                    }
+                    onDownloadLocalClick = onDownloadLocalClick, // Triggers ViewModel local download action
+                    onDriveSyncClick = onDriveSyncClick          // Triggers ViewModel RabbitMQ queue action
                 )
             }
 
@@ -184,6 +250,22 @@ fun DetailScreenContent(
             }
         }
     }
+}
+
+// Place this outside your composables
+fun getDriveSyncIntent(context: Context): Intent {
+
+    val webClientId = WEB_CLIENT_ID
+
+    val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        .requestEmail()
+        .requestScopes(Scope("https://www.googleapis.com/auth/drive.file"))
+        .requestServerAuthCode(webClientId, true)
+        .build()
+
+    val client = GoogleSignIn.getClient(context, gso)
+//    client.signOut()
+    return client.signInIntent
 }
 
 @Preview(showBackground = true)
