@@ -15,10 +15,11 @@ android {
         applicationId = "com.example.treasure"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 5
+        versionName = "1.0.0-beta5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        applicationIdSuffix = ".beta"
     }
 
     buildTypes {
