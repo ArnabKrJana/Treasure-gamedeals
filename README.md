@@ -2,16 +2,16 @@
   <img src="assets/banner.png" alt="Treasure Banner" width="100%">
 </p>
 
-<h1 align="center">🏴‍☠️ Treasure</h1>
+<h1 align="center">Treasure</h1>
 
 <p align="center">
   <strong>The Ultimate Game Deal Tracker & Wishlist Companion</strong>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Kotlin-1.9+-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin">
+  <img src="https://img.shields.io/badge/Kotlin-2.2.10+-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin">
   <img src="https://img.shields.io/badge/Jetpack_Compose-1.5+-4285F4?logo=jetpackcompose&logoColor=white" alt="Compose">
-  <img src="https://img.shields.io/badge/Spring_Boot-3.2+-6DB33F?logo=springboot&logoColor=white" alt="Spring">
+  <img src="https://img.shields.io/badge/Spring_Boot-4.1+-6DB33F?logo=springboot&logoColor=white" alt="Spring">
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License">
 </p>
 
@@ -61,10 +61,11 @@ Built with **Jetpack Compose** on the front-end and a **Spring Boot BFF** on the
   <img src="assets/icons/aws.svg" height="35" alt="AWS">
 </p>
 
-- **Core**: Spring Boot 3.2, Spring Security (JWT).
+- **Core**: Spring Boot 4.1.0, Spring Security (JWT).
 - **Data**: Spring Data JPA, Hibernate, PostgreSQL.
 - **Caching & Messaging**: Redis, RabbitMQ.
 - **DevOps**: Docker, AWS Elastic Beanstalk, Swagger/OpenAPI.
+- **Repository Link**: 🔗 [Treasure Backend Repository](https://github.com/ArnabKrJana/Treasure-Backend.git)
 
 ---
 
@@ -74,6 +75,7 @@ Built with **Jetpack Compose** on the front-end and a **Spring Boot BFF** on the
   <img src="assets/screenshots/screenshot_1.png" width="30%" alt="Home Screen">
   <img src="assets/screenshots/screenshot_2.png" width="30%" alt="Game Details">
   <img src="assets/screenshots/screenshot_3.png" width="30%" alt="Settings Screen">
+  <br><br>
 </p>
 
 ---
@@ -95,16 +97,15 @@ graph LR
 
 ### Prerequisites
 - **Android Studio Ladybug** (or newer)
-- **JDK 17**
+- **JDK 21**
 - A Google Cloud Project for Sign-In & Drive APIs.
 
 ### Installation
 1. **Clone the repo**:
    ```bash
-   git clone https://github.com/Arnab-Kumar-Jana/Treasure.git
+   git clone https://github.com/ArnabKrJana/Treasure-gamedeals.git
    ```
-2. **Setup Keys**: Create a `local.properties` file with your API keys.
-3. **Build**: Sync Gradle and run the `:app` module.
+2. **Build**: Sync Gradle and run the `:app` module.
 
 ---
 
