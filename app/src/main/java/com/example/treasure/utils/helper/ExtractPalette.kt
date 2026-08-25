@@ -56,7 +56,7 @@ suspend fun getDynamicColor(
 }
 
 // Helper to pick the right color based on Theme (Dark/Light)
-private fun extractColorFromPalette(
+internal fun extractColorFromPalette(
     palette: Palette,
     isDark: Boolean,
     fallback: Color

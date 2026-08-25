@@ -11,4 +11,6 @@ object PaletteCache {
 
     fun get(key: String): Palette? = cache[key]
     fun put(key: String, value: Palette) = cache.put(key, value)
+
+    internal fun clear() = cache.evictAll()
 }
