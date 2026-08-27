@@ -138,6 +138,7 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("app.cash.turbine:turbine:1.2.1")
     testImplementation("com.google.truth:truth:1.4.5")
+    testImplementation("androidx.work:work-testing:$work_version")
 
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

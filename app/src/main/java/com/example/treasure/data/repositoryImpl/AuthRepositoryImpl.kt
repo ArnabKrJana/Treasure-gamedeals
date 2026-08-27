@@ -13,7 +13,7 @@ import com.example.treasure.domain.repository.AuthRepository
 import com.example.treasure.domain.uiModels.User
 import com.example.treasure.utils.TokenManager
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
@@ -21,11 +21,12 @@ class AuthRepositoryImpl @Inject constructor(
     private val treasureBackendApi: TreasureBackendApi,
     private val tokenManager: TokenManager,
     private val db: TreasureDatabase,
+    private val ioDispatcher: CoroutineDispatcher,
     @ApplicationContext private val context: Context
 ) : AuthRepository {
 
     override suspend fun loginWithGoogle(idToken: String): Result<User> =
-        withContext(Dispatchers.IO) {
+        withContext(ioDispatcher) {
             try {
                 val request = GoogleLoginRequest(idToken = idToken)
                 val response = treasureBackendApi.login("google", request)
@@ -97,7 +98,7 @@ class AuthRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun logout(): Result<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun logout(): Result<Unit> = withContext(ioDispatcher) {
         try {
             val refreshToken = tokenManager.getRefreshToken()
             if (!refreshToken.isNullOrBlank()) {
@@ -126,7 +127,7 @@ class AuthRepositoryImpl @Inject constructor(
         Result.success(Unit)
     }
 
-    override suspend fun deleteAccount(): Result<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun deleteAccount(): Result<Unit> = withContext(ioDispatcher) {
         try {
             val response = treasureBackendApi.deleteMyAccount()
             if (response.isSuccessful) {
