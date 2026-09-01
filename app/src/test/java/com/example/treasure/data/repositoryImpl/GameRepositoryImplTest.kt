@@ -6,15 +6,22 @@ import com.example.treasure.data.local.dao.DealDao
 import com.example.treasure.data.local.dao.UserInteractionDao
 import com.example.treasure.data.remote.apiService.TreasureBackendApi
 import com.example.treasure.data.remote.dto.GameDto
+import androidx.room.withTransaction
 import com.example.treasure.data.remote.dto.SpringPageResponse
 import com.google.common.truth.Truth.assertThat
 import io.mockk.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import retrofit2.Response
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class GameRepositoryImplTest {
 
     private lateinit var repository: GameRepositoryImpl
@@ -22,12 +29,23 @@ class GameRepositoryImplTest {
     private val db: TreasureDatabase = mockk()
     private val dealDao: DealDao = mockk(relaxed = true)
     private val userInteractionDao: UserInteractionDao = mockk(relaxed = true)
+    
+    private val testDispatcher = StandardTestDispatcher()
 
     @Before
     fun setup() {
+        Dispatchers.setMain(testDispatcher)
+        
         mockkStatic(Log::class)
         every { Log.d(any(), any()) } returns 0
         every { Log.e(any(), any()) } returns 0
+
+        // Mock Room withTransaction extension
+        mockkStatic("androidx.room.RoomDatabaseKt")
+        val transactionSlot = slot<suspend () -> Any?>()
+        coEvery { db.withTransaction(capture(transactionSlot)) } coAnswers {
+            transactionSlot.captured.invoke()
+        }
 
         every { db.dealDao() } returns dealDao
         every { db.userInteractionDao() } returns userInteractionDao
@@ -37,7 +55,9 @@ class GameRepositoryImplTest {
 
     @After
     fun tearDown() {
+        Dispatchers.resetMain()
         unmockkStatic(Log::class)
+        unmockkStatic("androidx.room.RoomDatabaseKt")
     }
 
     @Test

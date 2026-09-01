@@ -3,7 +3,6 @@ package com.example.treasure
 import android.app.Application
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
-import androidx.lifecycle.asFlow
 import androidx.work.BackoffPolicy
 import androidx.work.Configuration
 import androidx.work.Constraints
@@ -22,62 +21,128 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
-
 @HiltAndroidApp
-class MyApplication: Application(), Configuration.Provider{
-    @Inject lateinit var tokenManager: TokenManager
+class MyApplication : Application(), Configuration.Provider {
+
+    @Inject
+    lateinit var tokenManager: TokenManager
+
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
     @Inject
     lateinit var settingsRepository: SettingsRepository
 
     override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder().setWorkerFactory(workerFactory).build()
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
 
     override fun onCreate() {
         super.onCreate()
+
+        Log.d(
+            "PeriodicWork",
+            "========== APPLICATION STARTED =========="
+        )
+
         setupPeriodicWork()
-       // observeWorkStatus()
     }
 
     private fun setupPeriodicWork() {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .setRequiresBatteryNotLow(true)
-            .build()
+
+        Log.d(
+            "PeriodicWork",
+            "setupPeriodicWork() called"
+        )
 
         CoroutineScope(Dispatchers.IO).launch {
-            val savedFrequency = settingsRepository.syncFrequency.first()
-            Log.d("PeriodicWork", "Frequency: $savedFrequency")
+            try {
 
-            val workRequest = PeriodicWorkRequestBuilder<PriceSyncWorker>(savedFrequency.toLong(), TimeUnit.HOURS)
-                .setConstraints(constraints)
-                .setBackoffCriteria(
-                    BackoffPolicy.EXPONENTIAL,
-                    15,
-                    TimeUnit.MINUTES
+                /*
+                 * Read the user's saved sync frequency.
+                 *
+                 * Supported values from SettingsViewModel:
+                 * 4, 8, 12, 24 hours.
+                 */
+                val savedFrequency =
+                    settingsRepository.syncFrequency.first()
+
+                Log.d(
+                    "PeriodicWork",
+                    "Saved sync frequency: $savedFrequency hours"
                 )
-                .build()
 
-            WorkManager.getInstance(this@MyApplication).enqueueUniquePeriodicWork(
-                "PriceSyncWork",
-                ExistingPeriodicWorkPolicy.UPDATE,
-                workRequest
-            )
-        }
-    }
+                /*
+                 * Same execution precautions used when the
+                 * user changes the sync frequency in Settings.
+                 */
+                val constraints = Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .setRequiresBatteryNotLow(true)
+                    .build()
 
-    private fun observeWorkStatus() {
-        val workManager = WorkManager.getInstance(this)
-        // Observe by unique name
-        CoroutineScope(Dispatchers.Main).launch {
-            workManager.getWorkInfosForUniqueWorkLiveData("PriceSyncWork")
-                .asFlow()
-                .collect { workInfos ->
-                    workInfos?.forEach { workInfo ->
-                        Log.d("WorkManagerStatus", "Work: ${workInfo.tags} | State: ${workInfo.state}")
-                    }
-                }
+                /*
+                 * Production periodic work.
+                 *
+                 * IMPORTANT:
+                 * The period comes from the user's setting.
+                 * Do not hardcode 15 minutes here.
+                 */
+                val workRequest =
+                    PeriodicWorkRequestBuilder<PriceSyncWorker>(
+                        savedFrequency.toLong(),
+                        TimeUnit.HOURS
+                    )
+                        .setConstraints(constraints)
+                        .setBackoffCriteria(
+                            BackoffPolicy.EXPONENTIAL,
+                            15,
+                            TimeUnit.MINUTES
+                        )
+                        .build()
+
+                Log.d(
+                    "PeriodicWork",
+                    "Created PriceSyncWorker request"
+                )
+
+                Log.d(
+                    "PeriodicWork",
+                    "WorkRequest ID: ${workRequest.id}"
+                )
+
+                Log.d(
+                    "PeriodicWork",
+                    "Sync interval: $savedFrequency hours"
+                )
+
+                Log.d(
+                    "PeriodicWork",
+                    "Constraints: Network CONNECTED + Battery NOT LOW"
+                )
+
+                WorkManager
+                    .getInstance(this@MyApplication)
+                    .enqueueUniquePeriodicWork(
+                        "PriceSyncWork",
+                        ExistingPeriodicWorkPolicy.UPDATE,
+                        workRequest
+                    )
+
+                Log.d(
+                    "PeriodicWork",
+                    "PriceSyncWork successfully enqueued"
+                )
+
+            } catch (e: Exception) {
+
+                Log.e(
+                    "PeriodicWork",
+                    "FAILED to setup periodic work",
+                    e
+                )
+            }
         }
     }
 }
