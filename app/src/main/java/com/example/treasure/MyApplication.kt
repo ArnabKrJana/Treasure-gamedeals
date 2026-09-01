@@ -3,7 +3,6 @@ package com.example.treasure
 import android.app.Application
 import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
-import androidx.lifecycle.asFlow
 import androidx.work.BackoffPolicy
 import androidx.work.Configuration
 import androidx.work.Constraints
@@ -18,8 +17,6 @@ import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -44,12 +41,12 @@ class MyApplication : Application(), Configuration.Provider {
     override fun onCreate() {
         super.onCreate()
 
-        Log.d("PeriodicWork", "========== APPLICATION STARTED ==========")
+        Log.d(
+            "PeriodicWork",
+            "========== APPLICATION STARTED =========="
+        )
 
         setupPeriodicWork()
-
-        // Enable this while debugging the price-sync problem.
-        observeWorkStatus()
     }
 
     private fun setupPeriodicWork() {
@@ -60,9 +57,14 @@ class MyApplication : Application(), Configuration.Provider {
         )
 
         CoroutineScope(Dispatchers.IO).launch {
-
             try {
 
+                /*
+                 * Read the user's saved sync frequency.
+                 *
+                 * Supported values from SettingsViewModel:
+                 * 4, 8, 12, 24 hours.
+                 */
                 val savedFrequency =
                     settingsRepository.syncFrequency.first()
 
@@ -71,22 +73,28 @@ class MyApplication : Application(), Configuration.Provider {
                     "Saved sync frequency: $savedFrequency hours"
                 )
 
-//                val workRequest =
-//                    PeriodicWorkRequestBuilder<PriceSyncWorker>(
-//                        savedFrequency.toLong(),
-//                        TimeUnit.HOURS
-//                    )
-//                        .setBackoffCriteria(
-//                            BackoffPolicy.EXPONENTIAL,
-//                            15,
-//                            TimeUnit.MINUTES
-//                        )
-//                        .build()
+                /*
+                 * Same execution precautions used when the
+                 * user changes the sync frequency in Settings.
+                 */
+                val constraints = Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .setRequiresBatteryNotLow(true)
+                    .build()
+
+                /*
+                 * Production periodic work.
+                 *
+                 * IMPORTANT:
+                 * The period comes from the user's setting.
+                 * Do not hardcode 15 minutes here.
+                 */
                 val workRequest =
                     PeriodicWorkRequestBuilder<PriceSyncWorker>(
-                        15,
-                        TimeUnit.MINUTES
+                        savedFrequency.toLong(),
+                        TimeUnit.HOURS
                     )
+                        .setConstraints(constraints)
                         .setBackoffCriteria(
                             BackoffPolicy.EXPONENTIAL,
                             15,
@@ -102,6 +110,16 @@ class MyApplication : Application(), Configuration.Provider {
                 Log.d(
                     "PeriodicWork",
                     "WorkRequest ID: ${workRequest.id}"
+                )
+
+                Log.d(
+                    "PeriodicWork",
+                    "Sync interval: $savedFrequency hours"
+                )
+
+                Log.d(
+                    "PeriodicWork",
+                    "Constraints: Network CONNECTED + Battery NOT LOW"
                 )
 
                 WorkManager
@@ -126,51 +144,5 @@ class MyApplication : Application(), Configuration.Provider {
                 )
             }
         }
-    }
-
-    private fun observeWorkStatus() {
-
-        Log.d(
-            "WorkManagerStatus",
-            "Starting WorkManager observer"
-        )
-
-        val workManager = WorkManager.getInstance(this)
-
-        workManager
-            .getWorkInfosForUniqueWorkLiveData("PriceSyncWork")
-            .asFlow()
-            .onEach { workInfos ->
-
-                if (workInfos.isNullOrEmpty()) {
-
-                    Log.d(
-                        "WorkManagerStatus",
-                        "PriceSyncWork: NO WORK FOUND"
-                    )
-
-                } else {
-
-                    workInfos.forEach { workInfo ->
-
-                        Log.d(
-                            "WorkManagerStatus",
-                            """
-                            --------------------------------
-                            WorkManager Status
-                            ID: ${workInfo.id}
-                            State: ${workInfo.state}
-                            Tags: ${workInfo.tags}
-                            RunAttemptCount: ${workInfo.runAttemptCount}
-                            --------------------------------
-                            """.trimIndent()
-                        )
-                    }
-                }
-
-            }
-            .launchIn(
-                CoroutineScope(Dispatchers.Main)
-            )
     }
 }

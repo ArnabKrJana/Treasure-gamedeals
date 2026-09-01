@@ -1,249 +1,19 @@
-//package com.example.treasure.workers
-//
-//import android.app.NotificationChannel
-//import android.app.NotificationManager
-//import android.app.PendingIntent
-//import android.content.Context
-//import android.content.Intent
-//import android.os.Build
-//import android.util.Log
-//import androidx.core.app.NotificationCompat
-//import androidx.core.net.toUri
-//import androidx.hilt.work.HiltWorker
-//import androidx.room.withTransaction
-//import androidx.work.CoroutineWorker
-//import androidx.work.WorkerParameters
-//import com.example.treasure.R
-//import com.example.treasure.data.local.TreasureDatabase
-//import com.example.treasure.data.local.entity.NotificationEntity
-//import com.example.treasure.data.local.entity.UserInteractionEntity
-//import com.example.treasure.data.remote.apiService.TreasureBackendApi
-//import com.example.treasure.data.repositoryImpl.SettingsRepository
-//import dagger.assisted.Assisted
-//import dagger.assisted.AssistedInject
-//import kotlinx.coroutines.CoroutineDispatcher
-//import kotlinx.coroutines.flow.first
-//import kotlinx.coroutines.withContext
-//import kotlin.math.abs
-//
-//@HiltWorker
-//class PriceSyncWorker @AssistedInject constructor(
-//    @Assisted appContext: Context,
-//    @Assisted workerParams: WorkerParameters,
-//    private val database: TreasureDatabase,
-//    private val treasureBackendApi: TreasureBackendApi,
-//    private val settingsRepository: SettingsRepository,
-//    private val ioDispatcher: CoroutineDispatcher
-//) : CoroutineWorker(appContext, workerParams) {
-//
-//    override suspend fun doWork(): Result = workDefinition()
-//
-//    private suspend fun workDefinition(): Result = withContext(ioDispatcher) {
-//        Log.d("PriceSyncWorker", "Work started - checking for price updates via BFF")
-//
-//        val areNotificationsEnabled = settingsRepository.areNotificationsEnabled.first()
-//        if (!areNotificationsEnabled) {
-//            Log.d("PriceSyncWorker", "Notifications disabled by user. Skipping work.")
-//            return@withContext Result.success()
-//        }
-//
-//        val thresholdPercent = settingsRepository.notifyThreshold.first()
-//        val thresholdDecimal = thresholdPercent / 100.0
-//
-//        try {
-//            val wishlistItems = database.userInteractionDao().getFavorites().first()
-//            if (wishlistItems.isEmpty()) {
-//                Log.d("PriceSyncWorker", "No local favorites found, skipping sync")
-//                return@withContext Result.success()
-//            }
-//
-//            // --- 1. Single call to the BFF ---
-//            // The TokenAuthenticator handles injecting the JWT automatically!
-//            val response = treasureBackendApi.getWishlistPrices()
-//
-//            if (!response.isSuccessful || response.body() == null) {
-//                val code = response.code()
-//                Log.e("PriceSyncWorker", "Failed to fetch prices from BFF: $code")
-//                // Retry if it's a server error or rate limit
-//                return@withContext if (code in 500..599 || code == 429) Result.retry() else Result.failure()
-//            }
-//
-//            // Map of GameID -> Price String (e.g. "29.99")
-//            val remotePricesMap = response.body()!!
-//
-//            val changedGames = mutableListOf<NotificationEntity>()
-//            val updatedInteractions = mutableListOf<UserInteractionEntity>()
-//
-//            // --- 2. Compare local cache with BFF prices ---
-//            wishlistItems.forEach { localItem ->
-//                val newPriceString = remotePricesMap[localItem.gameId]
-//                val newPrice = newPriceString?.toDoubleOrNull()
-//
-//                if (newPrice != null) {
-//                    if (localItem.latestSyncedPrice != newPrice) {
-//                        updatedInteractions.add(
-//                            localItem.copy(
-//                                latestSyncedPrice = newPrice,
-//                                lastSyncTimestamp = System.currentTimeMillis()
-//                            )
-//                        )
-//                    }
-//
-//                    val snapshotPrice = localItem.currentPrice
-//                    if (snapshotPrice > 0) {
-//                        val diff = newPrice - snapshotPrice
-//                        val changePercent = diff / snapshotPrice
-//
-//                        // Check if the price drop exceeds the user's settings threshold
-//                        if (abs(changePercent) > thresholdDecimal) {
-//                            changedGames.add(
-//                                NotificationEntity(
-//                                    gameId = localItem.gameId,
-//                                    title = localItem.title,
-//                                    thumbnail = localItem.thumbnail,
-//                                    oldPrice = snapshotPrice,
-//                                    newPrice = newPrice
-//                                )
-//                            )
-//                        }
-//                    }
-//                }
-//            }
-//
-//            // --- 3. Update Local DB & Trigger Notifications ---
-//            if (updatedInteractions.isNotEmpty()) {
-//                database.withTransaction {
-//                    updatedInteractions.forEach { interaction ->
-//                        database.userInteractionDao().insertInteraction(interaction)
-//                    }
-//                }
-//            }
-//
-//            processNotifications(changedGames)
-//            Result.success()
-//
-//        } catch (e: Exception) {
-//            Log.e("PriceSyncWorker", "Work failed due to exception", e)
-//            Result.failure()
-//        }
-//    }
-//
-//    private suspend fun processNotifications(changedGames: List<NotificationEntity>) {
-//        if (changedGames.isNotEmpty()) {
-//            database.withTransaction {
-//                changedGames.forEach {
-//                    database.notificationDao().insertNotification(it)
-//                }
-//            }
-//
-//            if (changedGames.size == 1) {
-//                showSingleGameNotification(changedGames.first())
-//            } else {
-//                showBatchedNotification(changedGames)
-//            }
-//        }
-//        Log.d("PriceSyncWorker", "Processed ${changedGames.size} notification(s)")
-//    }
-//
-//    private fun getPendingIntent(): PendingIntent {
-//        val intent = Intent(Intent.ACTION_VIEW, "treasure://wishlist".toUri()).apply {
-//            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-//        }
-//        return PendingIntent.getActivity(
-//            applicationContext, 0, intent,
-//            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-//        )
-//    }
-//
-//    private fun createChannel(manager: NotificationManager) {
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-//            val channel = NotificationChannel(
-//                "price_alert_channel", "Price Alerts",
-//                NotificationManager.IMPORTANCE_HIGH
-//            ).apply {
-//                description = "Alerts for price drops and hikes on your wishlist"
-//            }
-//            manager.createNotificationChannel(channel)
-//        }
-//    }
-//
-//    private fun showSingleGameNotification(item: NotificationEntity) {
-//        val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-//        createChannel(manager)
-//
-//        val isDrop = item.newPrice < item.oldPrice
-//        val title = if (isDrop) "Price Drop: ${item.title}" else "Price Hike: ${item.title}"
-//        val content = "Price updated to ₹${item.newPrice.toInt()}"
-//
-//        val notification = NotificationCompat.Builder(applicationContext, "price_alert_channel")
-//            .setSmallIcon(if (isDrop) R.drawable.wishlist_filled else R.drawable.wishlist_outlined)
-//            .setContentTitle(title)
-//            .setContentText(content)
-//            .setPriority(NotificationCompat.PRIORITY_HIGH)
-//            .setContentIntent(getPendingIntent())
-//            .setAutoCancel(true)
-//            .build()
-//
-//        manager.notify(item.gameId.hashCode(), notification)
-//    }
-//
-//    private fun showBatchedNotification(items: List<NotificationEntity>) {
-//        val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-//        createChannel(manager)
-//
-//        val inboxStyle = NotificationCompat.InboxStyle()
-//            .setBigContentTitle("${items.size} Price Updates")
-//
-//        items.take(5).forEach {
-//            val prefix = if (it.newPrice < it.oldPrice) "↓" else "↑"
-//            inboxStyle.addLine("$prefix ${it.title}: ₹${it.newPrice.toInt()}")
-//        }
-//
-//        val notification = NotificationCompat.Builder(applicationContext, "price_alert_channel")
-//            .setSmallIcon(R.drawable.wishlist_filled)
-//            .setContentTitle("Wishlist Price Updates")
-//            .setContentText("${items.size} games have new prices.")
-//            .setStyle(inboxStyle)
-//            .setPriority(NotificationCompat.PRIORITY_HIGH)
-//            .setContentIntent(getPendingIntent())
-//            .setAutoCancel(true)
-//            .build()
-//
-//        manager.notify(999, notification)
-//    }
-//}
-
-
-
-
-
-
-
-
-
-
-
 package com.example.treasure.workers
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.os.Build
 import android.util.Log
-import androidx.core.app.NotificationCompat
-import androidx.core.net.toUri
 import androidx.hilt.work.HiltWorker
 import androidx.room.withTransaction
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.treasure.R
 import com.example.treasure.data.local.TreasureDatabase
 import com.example.treasure.data.local.entity.NotificationEntity
 import com.example.treasure.data.local.entity.UserInteractionEntity
 import com.example.treasure.data.remote.apiService.TreasureBackendApi
+import com.example.treasure.data.remote.dto.WishlistPriceDto
 import com.example.treasure.data.repositoryImpl.SettingsRepository
+import com.example.treasure.utils.PriceNotificationManager
+import com.google.gson.Gson
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CoroutineDispatcher
@@ -251,6 +21,21 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
+/**
+ * Synchronizes prices for the user's locally stored wishlist.
+ *
+ * Price changes are calculated against the previously synchronized price
+ * stored in [UserInteractionEntity.latestSyncedPrice].
+ *
+ * First successful sync:
+ *      Establishes the initial price baseline.
+ *
+ * Subsequent sync:
+ *      Compares the new price against the previous synchronized price.
+ *
+ * If the absolute percentage change reaches or exceeds the user's configured threshold,
+ * a notification is created and displayed.
+ */
 @HiltWorker
 class PriceSyncWorker @AssistedInject constructor(
     @Assisted appContext: Context,
@@ -258,15 +43,18 @@ class PriceSyncWorker @AssistedInject constructor(
     private val database: TreasureDatabase,
     private val treasureBackendApi: TreasureBackendApi,
     private val settingsRepository: SettingsRepository,
+    private val priceNotificationManager: PriceNotificationManager,
     private val ioDispatcher: CoroutineDispatcher
 ) : CoroutineWorker(
     appContext,
     workerParams
 ) {
 
+    private val gson = Gson()
+
     init {
         Log.d(
-            "PriceSyncWorker",
+            TAG,
             "========== WORKER INSTANCE CREATED =========="
         )
     }
@@ -274,13 +62,12 @@ class PriceSyncWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
 
         Log.d(
-            "PriceSyncWorker",
+            TAG,
             "========== DO WORK STARTED =========="
         )
 
         return workDefinition()
     }
-
 
     private suspend fun workDefinition(): Result =
         withContext(ioDispatcher) {
@@ -376,6 +163,7 @@ class PriceSyncWorker @AssistedInject constructor(
                     return@withContext if (
                         code in 500..599 || code == 429
                     ) {
+
                         Log.d(
                             TAG,
                             "Returning RETRY"
@@ -394,6 +182,14 @@ class PriceSyncWorker @AssistedInject constructor(
                     }
                 }
 
+                /*
+                 * Backend currently returns:
+                 * {
+                 *   "gameId": "{\"current\":1000.66,\"original\":3338.71}"
+                 * }
+                 * Therefore, the Retrofit type remains Map<String, String>
+                 * and each String must be parsed as JSON.
+                 */
                 val remotePricesMap =
                     response.body()!!
 
@@ -410,11 +206,8 @@ class PriceSyncWorker @AssistedInject constructor(
 
                 wishlistItems.forEach { localItem ->
 
-                    val newPriceString =
+                    val remotePriceJson =
                         remotePricesMap[localItem.gameId]
-
-                    val newPrice =
-                        newPriceString?.toDoubleOrNull()
 
                     Log.d(
                         TAG,
@@ -424,75 +217,145 @@ class PriceSyncWorker @AssistedInject constructor(
                         Title: ${localItem.title}
                         Local currentPrice: ${localItem.currentPrice}
                         Local latestSyncedPrice: ${localItem.latestSyncedPrice}
-                        Remote price string: $newPriceString
-                        Remote price: $newPrice
+                        Remote JSON: $remotePriceJson
                         """.trimIndent()
                     )
+
+                    if (remotePriceJson == null) {
+
+                        Log.d(
+                            TAG,
+                            "No remote price found for gameId=${localItem.gameId}"
+                        )
+
+                        return@forEach
+                    }
+
+                    val remotePriceDto: WishlistPriceDto?
+
+                    try {
+
+                        remotePriceDto =
+                            gson.fromJson(
+                                remotePriceJson,
+                                WishlistPriceDto::class.java
+                            )
+
+                    } catch (e: Exception) {
+
+                        Log.e(
+                            TAG,
+                            "Failed to parse remote price for gameId=${localItem.gameId}: $remotePriceJson",
+                            e
+                        )
+
+                        return@forEach
+                    }
+
+                    val newPrice =
+                        remotePriceDto?.current
 
                     if (newPrice == null) {
 
                         Log.d(
                             TAG,
-                            "No valid remote price for ${localItem.gameId}"
+                            "Remote price current value is null for ${localItem.gameId}"
                         )
 
                         return@forEach
                     }
 
-                    if (localItem.latestSyncedPrice != newPrice) {
+                    Log.d(
+                        TAG,
+                        """
+                        PARSED REMOTE PRICE
+                        Game ID: ${localItem.gameId}
+                        Current: ${remotePriceDto.current}
+                        Original: ${remotePriceDto.original}
+                        """.trimIndent()
+                    )
 
-                        Log.d(
-                            TAG,
-                            "Price changed since last sync: " +
-                                    "${localItem.latestSyncedPrice} -> $newPrice"
-                        )
-
-                        updatedInteractions.add(
-                            localItem.copy(
-                                latestSyncedPrice = newPrice,
-                                lastSyncTimestamp =
-                                    System.currentTimeMillis()
-                            )
-                        )
-                    }
-
-                    val snapshotPrice =
-                        localItem.currentPrice
-
-                    if (snapshotPrice <= 0) {
-
-                        Log.d(
-                            TAG,
-                            "Snapshot price <= 0. Cannot calculate percentage."
-                        )
-
-                        return@forEach
-                    }
-
-                    val diff =
-                        newPrice - snapshotPrice
-
-                    val changePercent =
-                        diff / snapshotPrice
+                    val previousPrice = localItem.latestSyncedPrice ?: 0.0
 
                     Log.d(
                         TAG,
                         """
                         PRICE COMPARISON
                         Game: ${localItem.title}
-                        Snapshot: $snapshotPrice
-                        New: $newPrice
-                        Difference: $diff
-                        Change: ${changePercent * 100}%
+                        Game ID: ${localItem.gameId}
+                        Previous known price: $previousPrice
+                        New price: $newPrice
                         Threshold: $thresholdPercent%
-                        Absolute change: ${abs(changePercent) * 100}%
                         """.trimIndent()
                     )
 
-                    if (
-                        abs(changePercent) >
-                        thresholdDecimal
-                    ) {
+                    /*
+                     * First successful sync for this game.
+                     *
+                     * There is no previous price to compare against,
+                     * so simply establish the initial baseline.
+                     */
+                    if (previousPrice <= 0.0) {
+
+                        Log.d(
+                            TAG,
+                            "No previous price available. Establishing initial price = $newPrice"
+                        )
+
+                        updatedInteractions.add(
+                            localItem.copy(
+                                latestSyncedPrice = newPrice,
+                                lastSyncTimestamp = System.currentTimeMillis()
+                            )
+                        )
+
+                        return@forEach
+                    }
+
+                    /*
+                     * Compare the NEW price against the PREVIOUSLY SYNCED price.
+                     */
+                    val diff = newPrice - previousPrice
+
+                    val changePercent =
+                        diff / previousPrice
+
+                    val absoluteChangePercent =
+                        abs(changePercent) * 100
+
+                    Log.d(
+                        TAG,
+                        """
+                        PRICE CHANGE
+                        Game: ${localItem.title}
+                        Previous: $previousPrice
+                        New: $newPrice
+                        Difference: $diff
+                        Change: ${changePercent * 100}%
+                        Absolute change: $absoluteChangePercent%
+                        Threshold: $thresholdPercent%
+                        """.trimIndent()
+                    )
+
+                    /*
+                     * Always update the baseline after successfully
+                     * receiving a valid price.
+                     */
+                    if (previousPrice != newPrice) {
+
+                        updatedInteractions.add(
+                            localItem.copy(
+                                latestSyncedPrice = newPrice,
+                                lastSyncTimestamp = System.currentTimeMillis()
+                            )
+                        )
+                    }
+
+                    /*
+                     * Notify only when the change from the PREVIOUS
+                     * known price exceeds or equals the configured threshold.
+                     */
+                    if (abs(changePercent) >= thresholdDecimal) {
 
                         Log.d(
                             TAG,
@@ -504,7 +367,7 @@ class PriceSyncWorker @AssistedInject constructor(
                                 gameId = localItem.gameId,
                                 title = localItem.title,
                                 thumbnail = localItem.thumbnail,
-                                oldPrice = snapshotPrice,
+                                oldPrice = previousPrice,
                                 newPrice = newPrice
                             )
                         )
@@ -520,16 +383,17 @@ class PriceSyncWorker @AssistedInject constructor(
 
                 Log.d(
                     TAG,
-                    "Games requiring price update = " +
-                            updatedInteractions.size
+                    "Games requiring price update = ${updatedInteractions.size}"
                 )
 
                 Log.d(
                     TAG,
-                    "Games requiring notification = " +
-                            changedGames.size
+                    "Games requiring notification = ${changedGames.size}"
                 )
 
+                /*
+                 * Save latest synced prices.
+                 */
                 if (updatedInteractions.isNotEmpty()) {
 
                     Log.d(
@@ -553,6 +417,10 @@ class PriceSyncWorker @AssistedInject constructor(
                     )
                 }
 
+                /*
+                 * Save notification records and show
+                 * Android notifications.
+                 */
                 processNotifications(changedGames)
 
                 Log.d(
@@ -570,6 +438,10 @@ class PriceSyncWorker @AssistedInject constructor(
                     e
                 )
 
+                /*
+                 * Network / unexpected errors should be retried
+                 * by WorkManager.
+                 */
                 Result.retry()
             }
         }
@@ -620,7 +492,7 @@ class PriceSyncWorker @AssistedInject constructor(
                 "Showing SINGLE notification"
             )
 
-            showSingleGameNotification(
+            priceNotificationManager.showSingleGameNotification(
                 changedGames.first()
             )
 
@@ -631,192 +503,10 @@ class PriceSyncWorker @AssistedInject constructor(
                 "Showing BATCHED notification: ${changedGames.size}"
             )
 
-            showBatchedNotification(
+            priceNotificationManager.showBatchedNotification(
                 changedGames
             )
         }
-    }
-
-    private fun getPendingIntent(): PendingIntent {
-
-        val intent = Intent(
-            Intent.ACTION_VIEW,
-            "treasure://wishlist".toUri()
-        ).apply {
-
-            flags =
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TASK
-        }
-
-        return PendingIntent.getActivity(
-            applicationContext,
-            0,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or
-                    PendingIntent.FLAG_UPDATE_CURRENT
-        )
-    }
-
-    private fun createChannel(
-        manager: NotificationManager
-    ) {
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-
-            val channel = NotificationChannel(
-                "price_alert_channel",
-                "Price Alerts",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-
-                description =
-                    "Alerts for price drops and hikes on your wishlist"
-            }
-
-            manager.createNotificationChannel(channel)
-
-            Log.d(
-                TAG,
-                "Notification channel created/updated"
-            )
-        }
-    }
-
-    private fun showSingleGameNotification(
-        item: NotificationEntity
-    ) {
-
-        val manager =
-            applicationContext.getSystemService(
-                Context.NOTIFICATION_SERVICE
-            ) as NotificationManager
-
-        Log.d(
-            TAG,
-            "NotificationManager obtained"
-        )
-
-        createChannel(manager)
-
-        val isDrop =
-            item.newPrice < item.oldPrice
-
-        val title =
-            if (isDrop) {
-                "Price Drop: ${item.title}"
-            } else {
-                "Price Hike: ${item.title}"
-            }
-
-        val content =
-            "Price updated to ₹${item.newPrice.toInt()}"
-
-        val notification =
-            NotificationCompat.Builder(
-                applicationContext,
-                "price_alert_channel"
-            )
-                .setSmallIcon(
-                    if (isDrop) {
-                        R.drawable.wishlist_filled
-                    } else {
-                        R.drawable.wishlist_outlined
-                    }
-                )
-                .setContentTitle(title)
-                .setContentText(content)
-                .setPriority(
-                    NotificationCompat.PRIORITY_HIGH
-                )
-                .setContentIntent(
-                    getPendingIntent()
-                )
-                .setAutoCancel(true)
-                .build()
-
-        Log.d(
-            TAG,
-            "Calling NotificationManager.notify()"
-        )
-
-        manager.notify(
-            item.gameId.hashCode(),
-            notification
-        )
-
-        Log.d(
-            TAG,
-            "NotificationManager.notify() completed"
-        )
-    }
-
-    private fun showBatchedNotification(
-        items: List<NotificationEntity>
-    ) {
-
-        val manager =
-            applicationContext.getSystemService(
-                Context.NOTIFICATION_SERVICE
-            ) as NotificationManager
-
-        createChannel(manager)
-
-        val inboxStyle =
-            NotificationCompat.InboxStyle()
-                .setBigContentTitle(
-                    "${items.size} Price Updates"
-                )
-
-        items
-            .take(5)
-            .forEach {
-
-                val prefix =
-                    if (it.newPrice < it.oldPrice) {
-                        "↓"
-                    } else {
-                        "↑"
-                    }
-
-                inboxStyle.addLine(
-                    "$prefix ${it.title}: ₹${it.newPrice.toInt()}"
-                )
-            }
-
-        val notification =
-            NotificationCompat.Builder(
-                applicationContext,
-                "price_alert_channel"
-            )
-                .setSmallIcon(
-                    R.drawable.wishlist_filled
-                )
-                .setContentTitle(
-                    "Wishlist Price Updates"
-                )
-                .setContentText(
-                    "${items.size} games have new prices."
-                )
-                .setStyle(inboxStyle)
-                .setPriority(
-                    NotificationCompat.PRIORITY_HIGH
-                )
-                .setContentIntent(
-                    getPendingIntent()
-                )
-                .setAutoCancel(true)
-                .build()
-
-        Log.d(
-            TAG,
-            "Calling NotificationManager.notify() for batch"
-        )
-
-        manager.notify(
-            999,
-            notification
-        )
     }
 
     companion object {

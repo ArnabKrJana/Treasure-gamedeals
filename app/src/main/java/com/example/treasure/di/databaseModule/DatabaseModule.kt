@@ -3,7 +3,11 @@ package com.example.treasure.di.databaseModule
 import android.content.Context
 import androidx.room.Room
 import com.example.treasure.data.local.TreasureDatabase
+import com.example.treasure.data.local.dao.DealDao
 import com.example.treasure.data.local.dao.DownloadedAssetDao
+import com.example.treasure.data.local.dao.NotificationDao
+import com.example.treasure.data.local.dao.RemoteKeysDao
+import com.example.treasure.data.local.dao.UserInteractionDao
 import com.example.treasure.utils.Constants.DATABASE_NAME
 import dagger.Module
 import dagger.Provides
@@ -31,4 +35,24 @@ object DatabaseModule {
     @Singleton
     fun provideDownloadedAssetDao(database: TreasureDatabase): DownloadedAssetDao =
         database.downloadedAssetDao()
+
+    @Provides
+    @Singleton
+    fun provideDealDao(database: TreasureDatabase): DealDao =
+        database.dealDao()
+
+    @Provides
+    @Singleton
+    fun provideUserInteractionDao(database: TreasureDatabase): UserInteractionDao =
+        database.userInteractionDao()
+
+    @Provides
+    @Singleton
+    fun provideNotificationDao(database: TreasureDatabase): NotificationDao =
+        database.notificationDao()
+
+    @Provides
+    @Singleton
+    fun provideRemoteKeysDao(database: TreasureDatabase): RemoteKeysDao =
+        database.remoteKeysDao()
 }

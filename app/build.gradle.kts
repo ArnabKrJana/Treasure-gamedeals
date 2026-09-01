@@ -18,7 +18,7 @@ android {
         versionCode = 5
         versionName = "1.0.0-beta5"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.example.treasure.CustomTestRunner"
         applicationIdSuffix = ".beta"
     }
 
@@ -132,6 +132,9 @@ dependencies {
     implementation(libs.androidx.palette)
     implementation(libs.androidx.collection.ktx)
 
+    //---  GSON SERIALIZATION  ---
+    implementation("com.google.code.gson:gson:2.14.0")
+
     // --- TEST LAB SUITE ---
     testImplementation(libs.junit)
     testImplementation("io.mockk:mockk:1.14.11")
@@ -145,6 +148,12 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation("androidx.navigation:navigation-testing:$nav_version")
+    androidTestImplementation("androidx.work:work-testing:$work_version")
+    androidTestImplementation("com.google.truth:truth:1.4.5")
+    androidTestImplementation("io.mockk:mockk-android:1.14.11")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+    androidTestImplementation("com.google.dagger:hilt-android-testing:2.57.2")
+    kspAndroidTest("com.google.dagger:hilt-android-compiler:2.57.2")
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
