@@ -17,26 +17,26 @@
 
 ---
 
-## ✨ Overview
+## Overview
 
 **Treasure** is a modern, high-performance game deal tracker designed for gamers who never want to miss a sale. By aggregating data from Steam, GOG, Epic Games, and more, Treasure provides a unified interface to discover "Hot Deals", "Historic Lows", and platform-specific bargains.
 
-Built with **Jetpack Compose** on the front-end and a **Spring Boot BFF** on the back-end, it offers a seamless, offline-first experience with cloud synchronization via Google Drive.
+Built with **Jetpack Compose** on the front-end and a **Spring Boot BFF** on the back-end, it offers a seamless, offline-first experience with price alerts via WorkManager and direct game wallpaper collection on Google Drive.
 
 ---
 
-## 📱 Features
+## Features
 
-- 🎯 **Deal Discovery**: Real-time tracking of platform-specific sales (Mac/Linux) and "Lowest Price Ever" alerts.
-- 📺 **Immersive Media**: High-quality screenshots and trailers powered by **Media3 ExoPlayer**.
-- 🔔 **Smart Alerts**: Customizable price-drop notifications so you buy only when the price is right.
-- ☁️ **Cloud Sync**: Securely backup your wishlist using **Google Drive integration**.
-- 🎨 **Material You**: Full **Material 3** implementation with **Dynamic Color** support.
-- 🚀 **Performance**: Offline-first architecture with **Room DB** and **Paging 3**.
+- **Deal Discovery**: Real-time tracking of platform-specific sales (Mac/Linux) and "Lowest Price Ever" alerts.
+- **Immersive Media**: High-quality screenshots and trailers powered by **Media3 ExoPlayer**.
+- **Smart Alerts**: Customizable price-drop notifications so you buy only when the price is right.
+- **Google Drive Integration**: Save game wallpapers directly to your Google Drive if you don't want to download them locally.
+- **Material You**: Full **Material 3** implementation with **Dynamic Color** support.
+- **Performance**: Offline-first architecture with **Room DB** and **Paging 3**.
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 ### Frontend (Android)
 <p align="left">
@@ -65,11 +65,11 @@ Built with **Jetpack Compose** on the front-end and a **Spring Boot BFF** on the
 - **Data**: Spring Data JPA, Hibernate, PostgreSQL.
 - **Caching & Messaging**: Redis, RabbitMQ.
 - **DevOps**: Docker, AWS Elastic Beanstalk, Swagger/OpenAPI.
-- **Repository Link**: 🔗 [Treasure Backend Repository](https://github.com/ArnabKrJana/Treasure-Backend.git)
+- **Repository Link**: [Treasure Backend Repository](https://github.com/ArnabKrJana/Treasure-Backend.git)
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 <p align="center">
   <img src="assets/screenshots/screenshot_1.png" width="30%" alt="Home Screen">
@@ -80,7 +80,7 @@ Built with **Jetpack Compose** on the front-end and a **Spring Boot BFF** on the
 
 ---
 
-## 🏗 System Architecture
+## System Architecture
 
 ```mermaid
 graph LR
@@ -93,7 +93,7 @@ graph LR
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - **Android Studio Ladybug** (or newer)
@@ -109,12 +109,12 @@ graph LR
 
 ---
 
-## 📄 License
+## License
 
 Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
 <p align="center">
-  Developed with ❤️ by Arnab Kumar Jana
+  Developed by Arnab Kumar Jana
 </p>
