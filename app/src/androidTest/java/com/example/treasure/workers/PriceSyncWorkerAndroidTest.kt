@@ -141,69 +141,71 @@ class PriceSyncWorkerAndroidTest {
     }
 
     @Test
-    fun workerRun1WithZeroFavoritesSucceedsAndWorkerRun2ExecutesWhenFavoritesPopulated() = runBlocking {
-        val testWorkName = "PriceSyncWorkerTest-${UUID.randomUUID()}"
-        activeWorkNames.add(testWorkName)
+    fun workerRun1WithZeroFavoritesSucceedsAndWorkerRun2ExecutesWhenFavoritesPopulated() {
+        runBlocking {
+            val testWorkName = "PriceSyncWorkerTest-${UUID.randomUUID()}"
+            activeWorkNames.add(testWorkName)
 
-        val request = PeriodicWorkRequestBuilder<PriceSyncWorker>(15, TimeUnit.MINUTES).build()
+            val request = PeriodicWorkRequestBuilder<PriceSyncWorker>(15, TimeUnit.MINUTES).build()
 
-        workManager.enqueueUniquePeriodicWork(
-            testWorkName,
-            ExistingPeriodicWorkPolicy.UPDATE,
-            request
-        )
-
-        // --- RUN 1: Zero favorites in database ---
-        testDriver?.setPeriodDelayMet(request.id)
-
-        val workInfoRun1 = awaitExecutionComplete(request.id)
-        assertThat(workInfoRun1?.state).isEqualTo(WorkInfo.State.ENQUEUED)
-
-        // Backend should NOT have been called during Run 1
-        coVerify(exactly = 0) { api.getWishlistPrices() }
-
-        // --- SIMULATE USER LOGIN / CLOUD WISHLIST POPULATION ---
-        database.userInteractionDao().insertInteraction(
-            UserInteractionEntity(
-                gameId = "game_100",
-                title = "Hades II",
-                thumbnail = null,
-                currentPrice = 100.0,
-                originalPrice = 100.0,
-                storeId = "steam",
-                isFavorite = true,
-                latestSyncedPrice = 100.0
+            workManager.enqueueUniquePeriodicWork(
+                testWorkName,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                request
             )
-        )
 
-        // Mock backend price drop: 100.0 -> 80.0 (20% drop, > 3% threshold)
-        coEvery { api.getWishlistPrices() } returns Response.success(
-            mapOf("game_100" to """{"current":80.0,"original":100.0}""")
-        )
+            // --- RUN 1: Zero favorites in database ---
+            testDriver?.setPeriodDelayMet(request.id)
 
-        // --- RUN 2: Make next period eligible immediately on the SAME PeriodicWorkRequest ---
-        testDriver?.setPeriodDelayMet(request.id)
+            val workInfoRun1 = awaitExecutionComplete(request.id)
+            assertThat(workInfoRun1?.state).isEqualTo(WorkInfo.State.ENQUEUED)
 
-        val workInfoRun2 = awaitExecutionComplete(request.id)
-        assertThat(workInfoRun2?.state).isEqualTo(WorkInfo.State.ENQUEUED)
+            // Backend should NOT have been called during Run 1
+            coVerify(exactly = 0) { api.getWishlistPrices() }
 
-        // VERIFY RUN 2 SIDE EFFECTS:
-        // 1. Backend was called during Run 2
-        coVerify(exactly = 1) { api.getWishlistPrices() }
+            // --- SIMULATE USER LOGIN / CLOUD WISHLIST POPULATION ---
+            database.userInteractionDao().insertInteraction(
+                UserInteractionEntity(
+                    gameId = "game_100",
+                    title = "Hades II",
+                    thumbnail = null,
+                    currentPrice = 100.0,
+                    originalPrice = 100.0,
+                    storeId = "steam",
+                    isFavorite = true,
+                    latestSyncedPrice = 100.0
+                )
+            )
 
-        // 2. Local database price was updated to 80.0
-        val updatedGame = database.userInteractionDao().getInteractionForGame("game_100")
-        assertThat(updatedGame?.latestSyncedPrice).isEqualTo(80.0)
+            // Mock backend price drop: 100.0 -> 80.0 (20% drop, > 3% threshold)
+            coEvery { api.getWishlistPrices() } returns Response.success(
+                mapOf("game_100" to """{"current":80.0,"original":100.0}""")
+            )
 
-        // 3. Notification record was inserted into Room
-        val notifications = database.notificationDao().getAllNotifications().first()
-        assertThat(notifications).hasSize(1)
-        assertThat(notifications[0].gameId).isEqualTo("game_100")
-        assertThat(notifications[0].newPrice).isEqualTo(80.0)
+            // --- RUN 2: Make next period eligible immediately on the SAME PeriodicWorkRequest ---
+            testDriver?.setPeriodDelayMet(request.id)
 
-        // 4. Android notification was requested via PriceNotificationManager
-        verify(exactly = 1) {
-            priceNotificationManager.showSingleGameNotification(match { it.gameId == "game_100" })
+            val workInfoRun2 = awaitExecutionComplete(request.id)
+            assertThat(workInfoRun2?.state).isEqualTo(WorkInfo.State.ENQUEUED)
+
+            // VERIFY RUN 2 SIDE EFFECTS:
+            // 1. Backend was called during Run 2
+            coVerify(exactly = 1) { api.getWishlistPrices() }
+
+            // 2. Local database price was updated to 80.0
+            val updatedGame = database.userInteractionDao().getInteractionForGame("game_100")
+            assertThat(updatedGame?.latestSyncedPrice).isEqualTo(80.0)
+
+            // 3. Notification record was inserted into Room
+            val notifications = database.notificationDao().getAllNotifications().first()
+            assertThat(notifications).hasSize(1)
+            assertThat(notifications[0].gameId).isEqualTo("game_100")
+            assertThat(notifications[0].newPrice).isEqualTo(80.0)
+
+            // 4. Android notification was requested via PriceNotificationManager
+            verify(exactly = 1) {
+                priceNotificationManager.showSingleGameNotification(match { it.gameId == "game_100" })
+            }
         }
     }
 }
