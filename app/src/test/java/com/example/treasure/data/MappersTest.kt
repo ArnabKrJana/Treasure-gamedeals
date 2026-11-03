@@ -7,6 +7,9 @@ import com.example.treasure.domain.uiModels.RequirementType
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
+/**
+ * Unit tests verifying mapping transformations between remote DTOs and local Room entities.
+ */
 class MappersTest {
 
     @Test
@@ -140,6 +143,6 @@ class MappersTest {
         assertThat(entity.systemRequirements).hasSize(3)
         assertThat(entity.systemRequirements!![0].type).isEqualTo(RequirementType.MINIMUM)
         assertThat(entity.systemRequirements!![1].type).isEqualTo(RequirementType.MAXIMUM)
-        assertThat(entity.systemRequirements!![2].type).isEqualTo(RequirementType.MINIMUM) // Fallback for invalid type
+        assertThat(entity.systemRequirements!![2].type).isEqualTo(RequirementType.MINIMUM)
     }
 }

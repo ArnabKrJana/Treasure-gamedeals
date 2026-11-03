@@ -19,6 +19,9 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 
+/**
+ * Unit tests verifying [HomeScreenViewModel] deal streams, carousel state, and favorite interactions.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeScreenViewModelTest {
 
@@ -29,10 +32,9 @@ class HomeScreenViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
-        
-        // Mock necessary repository flows used in init
+
         every { repository.getDealsPaged(any()) } returns flowOf()
-        every { repository.observeInteractionIds() } returns flowOf(emptyList())
+        every { repository.getWishlistItems() } returns flowOf(emptyList())
         every { repository.getCartItems() } returns flowOf(emptyList())
     }
 
@@ -76,7 +78,7 @@ class HomeScreenViewModelTest {
             upVotes = null,
             price = null
         )
-        
+
         viewModel = HomeScreenViewModel(repository)
         viewModel.toggleFavorite(game)
         testDispatcher.scheduler.advanceUntilIdle()

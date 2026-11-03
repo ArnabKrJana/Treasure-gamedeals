@@ -1,7 +1,11 @@
 package com.example.treasure.ui.screens
 
 import android.content.res.Configuration
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -24,12 +28,18 @@ import com.example.treasure.domain.uiModels.Price
 import com.example.treasure.ui.uiComponents.GameCard
 import com.example.treasure.ui.viewModels.WishlistViewModel
 
+/**
+ * Stateful Composable screen displaying the user's saved wishlist games,
+ * live price tracking indicators, and quick-remove actions.
+ *
+ * @param viewModel Injected [WishlistViewModel] providing reactive wishlist records.
+ * @param onItemClick Invoked with the game ID when a wishlist deal card is tapped.
+ */
 @Composable
 fun WishlistScreen(
     viewModel: WishlistViewModel = hiltViewModel(),
     onItemClick: (String) -> Unit
 ) {
-
     val wishlistItems by viewModel.wishlistItems.collectAsStateWithLifecycle()
 
     WishlistScreenContent(
@@ -39,23 +49,27 @@ fun WishlistScreen(
     )
 }
 
+/**
+ * Stateless UI content container rendering an adaptive multi-column grid of wishlist items,
+ * or an empty state indicator when no games are saved.
+ *
+ * @param wishlistItems List of saved [UserInteractionEntity] records.
+ * @param onToggleFavorite Callback invoked when toggling favorite status.
+ * @param onItemClick Callback invoked when selecting a game card.
+ */
 @Composable
 fun WishlistScreenContent(
     wishlistItems: List<UserInteractionEntity>,
     onToggleFavorite: (UserInteractionEntity) -> Unit,
     onItemClick: (String) -> Unit
 ) {
-
     val gridState = rememberLazyGridState()
 
-
     if (wishlistItems.isEmpty()) {
-
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-
             Text(
                 text = "Your wishlist is empty",
                 style = MaterialTheme.typography.titleMedium,
@@ -63,55 +77,29 @@ fun WishlistScreenContent(
                 fontWeight = FontWeight.Normal
             )
         }
-
     } else {
-
         BoxWithConstraints(
             modifier = Modifier.fillMaxSize()
         ) {
-
-            val columns =
-                if (maxWidth < 600.dp) 2
-                else (maxWidth / 180.dp).toInt()
+            val columns = if (maxWidth < 600.dp) 2 else (maxWidth / 180.dp).toInt()
 
             LazyVerticalGrid(
-
                 state = gridState,
-
                 columns = GridCells.Fixed(columns),
-
                 modifier = Modifier.fillMaxSize(),
-
-                contentPadding = PaddingValues(
-                  16.dp,
-                ),
-
+                contentPadding = PaddingValues(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
-
                 verticalArrangement = Arrangement.spacedBy(12.dp)
-
-
             ) {
-
                 items(
                     items = wishlistItems,
                     key = { it.gameId }
                 ) { entity ->
-
                     GameCard(
-
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .aspectRatio(0.68f),
-
                         game = entity.toGameCardItem(),
-
                         isScrolling = gridState.isScrollInProgress,
-
                         isFavorite = entity.isFavorite,
-
                         onToggleFavorite = { onToggleFavorite(entity) },
-
                         onItemClick = onItemClick
                     )
                 }
@@ -120,13 +108,13 @@ fun WishlistScreenContent(
     }
 }
 
+/**
+ * Maps a Room [UserInteractionEntity] record into a presentation [GameCardItem],
+ * properly prioritizing newly synced cloud prices over stale baseline prices.
+ */
 private fun UserInteractionEntity.toGameCardItem(): GameCardItem {
-
     val displayCurrent = latestSyncedPrice ?: currentPrice
-
-    val displayOriginal =
-        if (latestSyncedPrice != null) currentPrice
-        else originalPrice
+    val displayOriginal = if (latestSyncedPrice != null) currentPrice else originalPrice
 
     return GameCardItem(
         id = gameId,
@@ -142,35 +130,16 @@ private fun UserInteractionEntity.toGameCardItem(): GameCardItem {
     )
 }
 
-@Preview(
-    name = "Phone - Light",
-    widthDp = 360,
-    heightDp = 800
-)
-@Preview(
-    name = "Phone - Dark",
-    widthDp = 360,
-    heightDp = 800,
-    uiMode = Configuration.UI_MODE_NIGHT_YES
-)
-@Preview(
-    name = "Tablet",
-    widthDp = 800,
-    heightDp = 1280
-)
-@Preview(
-    name = "Tablet - Dark",
-    widthDp = 800,
-    heightDp = 1280,
-    uiMode = Configuration.UI_MODE_NIGHT_YES
-)
-@Preview(name = "Light Mode")
-@Preview(name = "Dark Mode", uiMode = Configuration.UI_MODE_NIGHT_YES)
+/**
+ * Preview Composable for [WishlistScreenContent] in light and dark modes.
+ */
+@Preview(name = "Phone - Light", widthDp = 360, heightDp = 800)
+@Preview(name = "Phone - Dark", widthDp = 360, heightDp = 800, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Preview(name = "Tablet", widthDp = 800, heightDp = 1280)
+@Preview(name = "Tablet - Dark", widthDp = 800, heightDp = 1280, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 fun WishlistScreenPreview() {
-
     val sampleWishlist = listOf(
-
         UserInteractionEntity(
             gameId = "1",
             title = "The Witcher 3: Wild Hunt",
@@ -180,7 +149,6 @@ fun WishlistScreenPreview() {
             storeId = "Steam",
             isFavorite = true
         ),
-
         UserInteractionEntity(
             gameId = "2",
             title = "Cyberpunk 2077",
@@ -190,7 +158,6 @@ fun WishlistScreenPreview() {
             storeId = "GOG",
             isFavorite = true
         ),
-
         UserInteractionEntity(
             gameId = "3",
             title = "Red Dead Redemption 2",
@@ -200,7 +167,6 @@ fun WishlistScreenPreview() {
             storeId = "Epic",
             isFavorite = true
         ),
-
         UserInteractionEntity(
             gameId = "4",
             title = "Elden Ring",
@@ -223,14 +189,14 @@ fun WishlistScreenPreview() {
     }
 }
 
+/**
+ * Preview Composable for [WishlistScreenContent] in empty state.
+ */
 @Preview(name = "Empty State")
 @Composable
 fun WishlistScreenEmptyPreview() {
-
     MaterialTheme {
-
         Surface {
-
             WishlistScreenContent(
                 wishlistItems = emptyList(),
                 onToggleFavorite = {},

@@ -14,26 +14,32 @@ import com.example.treasure.ui.screens.NotificationScreen
 import com.example.treasure.ui.screens.WelcomeScreen
 import com.example.treasure.ui.viewModels.AuthViewModel
 
-
+/**
+ * Top-level navigation graph governing top-level routes and global session lifecycles.
+ *
+ * Automatically monitors [AuthViewModel.isSessionActive]. If the session expires or the user
+ * logs out / deletes their account, the entire backstack is immediately cleared and navigation
+ * resets to [RootGraphDestination.WelcomeScreenRoute].
+ *
+ * @param rootNavController Root navigation controller managing top-level destination transitions.
+ * @param authViewModel Injected [AuthViewModel] managing session authentication state.
+ */
 @Composable
 fun RootNavigationGraph(
     rootNavController: NavHostController,
-    authViewModel: AuthViewModel = hiltViewModel() // Inject the AuthViewModel
+    authViewModel: AuthViewModel = hiltViewModel()
 ) {
-    // Observe session state
     val isSessionActive by authViewModel.isSessionActive.collectAsState()
 
-    // --- THE EJECT SEAT ---
     LaunchedEffect(isSessionActive) {
         if (!isSessionActive) {
             rootNavController.navigate(RootGraphDestination.WelcomeScreenRoute) {
-                popUpTo(0) { inclusive = true } // Wipe the backstack
+                popUpTo(0) { inclusive = true }
                 launchSingleTop = true
             }
         }
     }
 
-    // --- DYNAMIC START DESTINATION ---
     val startDestination = if (isSessionActive) {
         RootGraphDestination.MainScreenRoute
     } else {
@@ -41,8 +47,6 @@ fun RootNavigationGraph(
     }
 
     NavHost(navController = rootNavController, startDestination = startDestination) {
-
-        // --- WELCOME SCREEN ---
         composable<RootGraphDestination.WelcomeScreenRoute> {
             WelcomeScreen(
                 onNavigateToHome = {
@@ -53,19 +57,16 @@ fun RootNavigationGraph(
             )
         }
 
-        // --- MAIN SCREEN (Bottom Bar) ---
         composable<RootGraphDestination.MainScreenRoute> {
             MainScreenComposable(rootNavController)
         }
 
-        // --- NOTIFICATIONS ---
         composable<RootGraphDestination.NotificationRoute> {
             NotificationScreen {
                 rootNavController.popBackStack()
             }
         }
 
-        // --- CART ---
         composable<RootGraphDestination.CartRoute> {
             CartScreen()
         }

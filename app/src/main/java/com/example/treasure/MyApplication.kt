@@ -21,6 +21,12 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
+/**
+ * Custom [Application] class initializing Hilt dependency injection, custom WorkManager
+ * worker factories, and bootstrapping background price sync periodic work.
+ *
+ * Implements [Configuration.Provider] to wire [HiltWorkerFactory] into AndroidX WorkManager.
+ */
 @HiltAndroidApp
 class MyApplication : Application(), Configuration.Provider {
 
@@ -40,55 +46,24 @@ class MyApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
-
-        Log.d(
-            "PeriodicWork",
-            "========== APPLICATION STARTED =========="
-        )
-
+        Log.d("PeriodicWork", "Application initialized; setting up background periodic sync.")
         setupPeriodicWork()
     }
 
+    /**
+     * Reads the persisted sync frequency setting from [SettingsRepository] and registers
+     * a unique periodic [PriceSyncWorker] with exponential backoff and network/battery constraints.
+     */
     private fun setupPeriodicWork() {
-
-        Log.d(
-            "PeriodicWork",
-            "setupPeriodicWork() called"
-        )
-
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                val savedFrequency = settingsRepository.syncFrequency.first()
 
-                /*
-                 * Read the user's saved sync frequency.
-                 *
-                 * Supported values from SettingsViewModel:
-                 * 4, 8, 12, 24 hours.
-                 */
-                val savedFrequency =
-                    settingsRepository.syncFrequency.first()
-
-                Log.d(
-                    "PeriodicWork",
-                    "Saved sync frequency: $savedFrequency hours"
-                )
-
-                /*
-                 * Same execution precautions used when the
-                 * user changes the sync frequency in Settings.
-                 */
                 val constraints = Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
                     .setRequiresBatteryNotLow(true)
                     .build()
 
-                /*
-                 * Production periodic work.
-                 *
-                 * IMPORTANT:
-                 * The period comes from the user's setting.
-                 * Do not hardcode 15 minutes here.
-                 */
                 val workRequest =
                     PeriodicWorkRequestBuilder<PriceSyncWorker>(
                         savedFrequency.toLong(),
@@ -102,26 +77,6 @@ class MyApplication : Application(), Configuration.Provider {
                         )
                         .build()
 
-                Log.d(
-                    "PeriodicWork",
-                    "Created PriceSyncWorker request"
-                )
-
-                Log.d(
-                    "PeriodicWork",
-                    "WorkRequest ID: ${workRequest.id}"
-                )
-
-                Log.d(
-                    "PeriodicWork",
-                    "Sync interval: $savedFrequency hours"
-                )
-
-                Log.d(
-                    "PeriodicWork",
-                    "Constraints: Network CONNECTED + Battery NOT LOW"
-                )
-
                 WorkManager
                     .getInstance(this@MyApplication)
                     .enqueueUniquePeriodicWork(
@@ -130,18 +85,9 @@ class MyApplication : Application(), Configuration.Provider {
                         workRequest
                     )
 
-                Log.d(
-                    "PeriodicWork",
-                    "PriceSyncWork successfully enqueued"
-                )
-
+                Log.d("PeriodicWork", "PriceSyncWork successfully enqueued with interval: $savedFrequency hours.")
             } catch (e: Exception) {
-
-                Log.e(
-                    "PeriodicWork",
-                    "FAILED to setup periodic work",
-                    e
-                )
+                Log.e("PeriodicWork", "Failed to setup periodic work", e)
             }
         }
     }

@@ -1,7 +1,6 @@
 package com.example.treasure.ui.screens
 
 import android.content.res.Configuration
-import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,11 +13,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -32,32 +29,41 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navDeepLink
+import androidx.paging.PagingData
+import androidx.paging.compose.collectAsLazyPagingItems
 import com.example.treasure.R
 import com.example.treasure.data.local.entity.DealCategory
 import com.example.treasure.data.local.entity.DealEntity
 import com.example.treasure.domain.uiModels.GameCardItem
 import com.example.treasure.domain.uiModels.Price
 import com.example.treasure.domain.uiModels.UpVotes
+import com.example.treasure.ui.Transitions.slideInFromLeft
+import com.example.treasure.ui.Transitions.slideInFromRight
+import com.example.treasure.ui.Transitions.slideOutToLeft
+import com.example.treasure.ui.Transitions.slideOutToRight
 import com.example.treasure.ui.navigationGraphs.LeafDestination
 import com.example.treasure.ui.navigationGraphs.NestedGraphDestination
 import com.example.treasure.ui.navigationGraphs.RootGraphDestination
 import com.example.treasure.ui.uiComponents.BottomNavBar
 import com.example.treasure.ui.uiComponents.TopAppBarComponent
-import com.example.treasure.ui.viewModels.NotificationViewModel
-import com.example.treasure.utils.ColorCode
-import androidx.paging.PagingData
-import androidx.paging.compose.collectAsLazyPagingItems
-import com.example.treasure.data.local.entity.enums.Role
-import com.example.treasure.domain.uiModels.User
-import kotlinx.coroutines.flow.flowOf
-import com.example.treasure.ui.Transitions
-import com.example.treasure.ui.Transitions.slideInFromLeft
-import com.example.treasure.ui.Transitions.slideInFromRight
-import com.example.treasure.ui.Transitions.slideOutToLeft
-import com.example.treasure.ui.Transitions.slideOutToRight
 import com.example.treasure.ui.viewModels.AuthViewModel
 import com.example.treasure.ui.viewModels.MainViewModel
+import com.example.treasure.ui.viewModels.NotificationViewModel
+import com.example.treasure.utils.ColorCode
+import kotlinx.coroutines.flow.flowOf
 
+/**
+ * Root container composable managing bottom navigation bar switching, nested sub-graphs,
+ * dynamic top app bar state, and deep link resolution.
+ *
+ * Encapsulates the four primary application tabs: Home, Search, Wishlist, and Settings,
+ * routing cross-tab navigation to the shared [LeafDestination.Detail] destination.
+ *
+ * @param rootNavController Root navigation controller managing top-level transitions (e.g. notifications).
+ * @param mainViewModel ViewModel providing user session and profile identity.
+ * @param authViewModel ViewModel managing authentication and account deletion requests.
+ * @param notificationViewModel ViewModel providing unread notification counts for the app bar badge.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreenComposable(
@@ -66,7 +72,6 @@ fun MainScreenComposable(
     authViewModel: AuthViewModel = hiltViewModel(),
     notificationViewModel: NotificationViewModel = hiltViewModel()
 ) {
-    // 1. Observe real user data
     val currentUser by mainViewModel.currentUser.collectAsStateWithLifecycle()
 
     val bottomNavController = rememberNavController()
@@ -77,7 +82,6 @@ fun MainScreenComposable(
 
     val notificationCount by notificationViewModel.unreadCount.collectAsStateWithLifecycle()
 
-    // --- IDENTIFY ACTIVE SCREENS ---
     val isHomeScreen = currentDestination?.hasRoute<LeafDestination.HomeList>() == true
     val isSearchScreen = currentDestination?.hasRoute<LeafDestination.SearchInput>() == true
     val isDetailScreen = currentDestination?.hasRoute<LeafDestination.Detail>() == true
@@ -110,7 +114,6 @@ fun MainScreenComposable(
                     onNotificationBtnClick = {
                         rootNavController.navigate(RootGraphDestination.NotificationRoute)
                     },
-                    // 2. Wire the real data and auth triggers
                     currentUser = currentUser,
                     onLogoutClick = { authViewModel.logout() },
                     onDeleteAccountClick = { authViewModel.deleteMyAccount() }
@@ -141,8 +144,6 @@ fun MainScreenComposable(
             popEnterTransition = { fadeIn(tween(220)) },
             popExitTransition = { fadeOut(tween(220)) }
         ) {
-
-            // --- HOME TAB ---
             navigation<NestedGraphDestination.HomeGraph>(startDestination = LeafDestination.HomeList) {
                 composable<LeafDestination.HomeList>(
                     enterTransition = { fadeIn(tween(500)) },
@@ -167,7 +168,6 @@ fun MainScreenComposable(
                 }
             }
 
-            // --- SEARCH TAB ---
             navigation<NestedGraphDestination.SearchGraph>(startDestination = LeafDestination.SearchInput) {
                 composable<LeafDestination.SearchInput>(
                     enterTransition = { fadeIn(tween(250)) },
@@ -199,7 +199,6 @@ fun MainScreenComposable(
                 }
             }
 
-            // --- WISHLIST TAB ---
             navigation<NestedGraphDestination.WishlistGraph>(startDestination = LeafDestination.WishlistList) {
                 composable<LeafDestination.WishlistList>(
                     deepLinks = listOf(
@@ -225,7 +224,6 @@ fun MainScreenComposable(
                 }
             }
 
-            // --- SETTING TAB ---
             navigation<NestedGraphDestination.SettingGraph>(startDestination = LeafDestination.SettingScreen) {
                 composable<LeafDestination.SettingScreen>(
                     enterTransition = { fadeIn(tween(250)) },
@@ -240,6 +238,9 @@ fun MainScreenComposable(
     }
 }
 
+/**
+ * Preview Composable for [MainScreenComposable] illustrating the Home view layout.
+ */
 @Preview(name = "Main - Home View")
 @Composable
 fun MainScreenHomePreview() {
@@ -273,6 +274,9 @@ fun MainScreenHomePreview() {
     }
 }
 
+/**
+ * Preview Composable for [MainScreenComposable] illustrating the Detail view layout.
+ */
 @Preview(name = "Main - Detail View")
 @Composable
 fun MainScreenDetailPreview() {
@@ -306,6 +310,9 @@ fun MainScreenDetailPreview() {
     }
 }
 
+/**
+ * Preview Composable for [MainScreenComposable] in dark theme mode.
+ */
 @Preview(name = "Main - Dark Theme", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 fun MainScreenDarkPreview() {

@@ -11,6 +11,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 
+/**
+ * Reusable two-tone informational row composable displaying a bold label alongside a styled value string.
+ *
+ * Used across game detail specification cards to format publishers, developers, release dates, and franchises.
+ *
+ * @param label The descriptive property key (e.g., "Developer:", "Release Date:").
+ * @param value The corresponding property value text.
+ * @param modifier Composable modifier for layout and padding customization.
+ */
 @Composable
 fun DetailInfoRow(
     label: String,

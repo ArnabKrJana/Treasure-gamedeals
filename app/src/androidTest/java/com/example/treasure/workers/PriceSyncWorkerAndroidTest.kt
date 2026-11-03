@@ -5,7 +5,14 @@ import android.util.Log
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.work.*
+import androidx.work.Configuration
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ListenableWorker
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.WorkerFactory
+import androidx.work.WorkerParameters
 import androidx.work.testing.SynchronousExecutor
 import androidx.work.testing.TestDriver
 import androidx.work.testing.WorkManagerTestInitHelper
@@ -15,7 +22,11 @@ import com.example.treasure.data.remote.apiService.TreasureBackendApi
 import com.example.treasure.data.repositoryImpl.SettingsRepository
 import com.example.treasure.utils.PriceNotificationManager
 import com.google.common.truth.Truth.assertThat
-import io.mockk.*
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -29,6 +40,9 @@ import retrofit2.Response
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
+/**
+ * Instrumented tests verifying [PriceSyncWorker] execution and periodic lifecycle transitions with WorkManager TestDriver.
+ */
 @RunWith(AndroidJUnit4::class)
 class PriceSyncWorkerAndroidTest {
 
@@ -47,7 +61,6 @@ class PriceSyncWorkerAndroidTest {
     fun setup() {
         context = InstrumentationRegistry.getInstrumentation().targetContext
 
-        // Use a fresh in-memory Room database for fast, isolated instrumented tests
         database = Room.inMemoryDatabaseBuilder(context, TreasureDatabase::class.java)
             .allowMainThreadQueries()
             .build()
@@ -95,9 +108,6 @@ class PriceSyncWorkerAndroidTest {
         database.close()
     }
 
-    /**
-     * Polls [WorkManager] until the execution of [id] is no longer RUNNING.
-     */
     private suspend fun awaitExecutionComplete(
         id: UUID,
         timeoutMs: Long = 5000
@@ -127,85 +137,68 @@ class PriceSyncWorkerAndroidTest {
             request
         )
 
-        // Mark the 15-minute period delay as met so execution runs immediately
         testDriver?.setPeriodDelayMet(request.id)
 
-        // Deterministically wait for worker execution to complete
         val workInfo = awaitExecutionComplete(request.id)
 
-        // Periodic work transitions back to ENQUEUED after a successful run
         assertThat(workInfo?.state).isEqualTo(WorkInfo.State.ENQUEUED)
-
-        // Verify backend was NOT called on 0 favorites
         coVerify(exactly = 0) { api.getWishlistPrices() }
     }
 
     @Test
-    fun workerRun1WithZeroFavoritesSucceedsAndWorkerRun2ExecutesWhenFavoritesPopulated() {
-        runBlocking {
-            val testWorkName = "PriceSyncWorkerTest-${UUID.randomUUID()}"
-            activeWorkNames.add(testWorkName)
+    fun workerRun1WithZeroFavoritesSucceedsAndWorkerRun2ExecutesWhenFavoritesPopulated() = runBlocking {
+        val testWorkName = "PriceSyncWorkerTest-${UUID.randomUUID()}"
+        activeWorkNames.add(testWorkName)
 
-            val request = PeriodicWorkRequestBuilder<PriceSyncWorker>(15, TimeUnit.MINUTES).build()
+        val request = PeriodicWorkRequestBuilder<PriceSyncWorker>(15, TimeUnit.MINUTES).build()
 
-            workManager.enqueueUniquePeriodicWork(
-                testWorkName,
-                ExistingPeriodicWorkPolicy.UPDATE,
-                request
+        workManager.enqueueUniquePeriodicWork(
+            testWorkName,
+            ExistingPeriodicWorkPolicy.UPDATE,
+            request
+        )
+
+        testDriver?.setPeriodDelayMet(request.id)
+
+        val workInfoRun1 = awaitExecutionComplete(request.id)
+        assertThat(workInfoRun1?.state).isEqualTo(WorkInfo.State.ENQUEUED)
+
+        coVerify(exactly = 0) { api.getWishlistPrices() }
+
+        database.userInteractionDao().insertInteraction(
+            UserInteractionEntity(
+                gameId = "game_100",
+                title = "Hades II",
+                thumbnail = null,
+                currentPrice = 100.0,
+                originalPrice = 100.0,
+                storeId = "steam",
+                isFavorite = true,
+                latestSyncedPrice = 100.0
             )
+        )
 
-            // --- RUN 1: Zero favorites in database ---
-            testDriver?.setPeriodDelayMet(request.id)
+        coEvery { api.getWishlistPrices() } returns Response.success(
+            mapOf("game_100" to """{"current":80.0,"original":100.0}""")
+        )
 
-            val workInfoRun1 = awaitExecutionComplete(request.id)
-            assertThat(workInfoRun1?.state).isEqualTo(WorkInfo.State.ENQUEUED)
+        testDriver?.setPeriodDelayMet(request.id)
 
-            // Backend should NOT have been called during Run 1
-            coVerify(exactly = 0) { api.getWishlistPrices() }
+        val workInfoRun2 = awaitExecutionComplete(request.id)
+        assertThat(workInfoRun2?.state).isEqualTo(WorkInfo.State.ENQUEUED)
 
-            // --- SIMULATE USER LOGIN / CLOUD WISHLIST POPULATION ---
-            database.userInteractionDao().insertInteraction(
-                UserInteractionEntity(
-                    gameId = "game_100",
-                    title = "Hades II",
-                    thumbnail = null,
-                    currentPrice = 100.0,
-                    originalPrice = 100.0,
-                    storeId = "steam",
-                    isFavorite = true,
-                    latestSyncedPrice = 100.0
-                )
-            )
+        coVerify(exactly = 1) { api.getWishlistPrices() }
 
-            // Mock backend price drop: 100.0 -> 80.0 (20% drop, > 3% threshold)
-            coEvery { api.getWishlistPrices() } returns Response.success(
-                mapOf("game_100" to """{"current":80.0,"original":100.0}""")
-            )
+        val updatedGame = database.userInteractionDao().getInteractionForGame("game_100")
+        assertThat(updatedGame?.latestSyncedPrice).isEqualTo(80.0)
 
-            // --- RUN 2: Make next period eligible immediately on the SAME PeriodicWorkRequest ---
-            testDriver?.setPeriodDelayMet(request.id)
+        val notifications = database.notificationDao().getAllNotifications().first()
+        assertThat(notifications).hasSize(1)
+        assertThat(notifications[0].gameId).isEqualTo("game_100")
+        assertThat(notifications[0].newPrice).isEqualTo(80.0)
 
-            val workInfoRun2 = awaitExecutionComplete(request.id)
-            assertThat(workInfoRun2?.state).isEqualTo(WorkInfo.State.ENQUEUED)
-
-            // VERIFY RUN 2 SIDE EFFECTS:
-            // 1. Backend was called during Run 2
-            coVerify(exactly = 1) { api.getWishlistPrices() }
-
-            // 2. Local database price was updated to 80.0
-            val updatedGame = database.userInteractionDao().getInteractionForGame("game_100")
-            assertThat(updatedGame?.latestSyncedPrice).isEqualTo(80.0)
-
-            // 3. Notification record was inserted into Room
-            val notifications = database.notificationDao().getAllNotifications().first()
-            assertThat(notifications).hasSize(1)
-            assertThat(notifications[0].gameId).isEqualTo("game_100")
-            assertThat(notifications[0].newPrice).isEqualTo(80.0)
-
-            // 4. Android notification was requested via PriceNotificationManager
-            verify(exactly = 1) {
-                priceNotificationManager.showSingleGameNotification(match { it.gameId == "game_100" })
-            }
+        verify(exactly = 1) {
+            priceNotificationManager.showSingleGameNotification(match { it.gameId == "game_100" })
         }
     }
 }

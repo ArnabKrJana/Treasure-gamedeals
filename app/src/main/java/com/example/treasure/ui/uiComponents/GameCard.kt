@@ -5,13 +5,34 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +54,22 @@ import com.example.treasure.ui.theme.LocalThemeIsDark
 import com.example.treasure.utils.ColorCode
 import com.example.treasure.utils.helper.getDynamicColor
 
+/**
+ * Standard video game card composable rendered across grid and list catalog screens.
+ *
+ * Implements:
+ * - Dynamic color extraction from cover artwork ([getDynamicColor]), animating transitions with [animateColorAsState].
+ * - Responsive typographic and element scaling via [BoxWithConstraints] (switching layout scale at 180dp breakpoint).
+ * - Hoisted state interactions for favorite toggling and item selection.
+ * - Strikethrough original pricing alongside current discounted price and discount badges.
+ *
+ * @param game The [GameCardItem] model containing game metadata, store, and pricing.
+ * @param isScrolling `true` if parent list is actively scrolling, suppressing palette extraction to maintain 60fps.
+ * @param isFavorite `true` if the game is currently marked as a user favorite.
+ * @param onToggleFavorite Callback invoked when the user taps the favorite heart icon.
+ * @param onItemClick Callback invoked when the user selects the card body.
+ * @param modifier Composable modifier for outer card container.
+ */
 @Composable
 fun GameCard(
     game: GameCardItem,
@@ -42,7 +79,6 @@ fun GameCard(
     onItemClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-
     val defaultColor = MaterialTheme.colorScheme.surfaceVariant
     var cardColor by remember(game.thumbnail) { mutableStateOf(defaultColor) }
 
@@ -52,7 +88,6 @@ fun GameCard(
         label = "Color Fade"
     )
 
-    // FIX: Read from the App's Theme state, NOT the System's state
     val isDark = LocalThemeIsDark.current
     val context = LocalContext.current
 
@@ -84,13 +119,11 @@ fun GameCard(
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(3.dp)
     ) {
-
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(gradientBrush)
         ) {
-
             val smallCard = maxWidth < 180.dp
 
             val titleSize = if (smallCard) 12.sp else 14.sp
@@ -101,14 +134,11 @@ fun GameCard(
             val padding = if (smallCard) 6.dp else 8.dp
 
             Column(modifier = Modifier.fillMaxSize()) {
-
-                // IMAGE SECTION
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(0.55f)
                 ) {
-
                     AsyncImage(
                         model = game.thumbnail,
                         contentDescription = game.title,
@@ -137,7 +167,6 @@ fun GameCard(
                     }
                 }
 
-                // DETAILS SECTION
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -145,7 +174,6 @@ fun GameCard(
                         .padding(horizontal = padding, vertical = padding),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-
                     Text(
                         text = game.title,
                         color = Color.White,
@@ -157,16 +185,14 @@ fun GameCard(
                     )
 
                     game.price?.let { price ->
-
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-
                             Text(
                                 text = "₹${price.currentPrice.toInt()}",
-                                color = if (!isDark) Color(0xff00B7B5) else Color(0xFF00FF00),
+                                color = if (!isDark) Color(0xFF00B7B5) else Color(0xFF00FF00),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = priceSize,
                                 maxLines = 1
@@ -197,7 +223,6 @@ fun GameCard(
                                 )
                             }
                         }
-
                     } ?: Spacer(modifier = Modifier.weight(1f))
 
                     Row(
@@ -205,24 +230,14 @@ fun GameCard(
                         horizontalArrangement = Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-
                         IconButton(
                             onClick = onToggleFavorite,
                             modifier = Modifier.size(iconSize)
                         ) {
-
                             Icon(
-                                imageVector =
-                                    if (isFavorite)
-                                        Icons.Filled.Favorite
-                                    else
-                                        Icons.Default.FavoriteBorder,
+                                imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Default.FavoriteBorder,
                                 contentDescription = "Like",
-                                tint =
-                                    if (isFavorite)
-                                        Color(0xFFEB0076)
-                                    else
-                                        Color.White
+                                tint = if (isFavorite) Color(0xFFEB0076) else Color.White
                             )
                         }
                     }
@@ -232,6 +247,14 @@ fun GameCard(
     }
 }
 
+/**
+ * Compact pill badge composable displaying storefront tags and status labels.
+ *
+ * @param text Content string to display.
+ * @param color Background color of the pill.
+ * @param textColor Text label color. Defaults to [Color.White].
+ * @param modifier Composable modifier for container customization.
+ */
 @Composable
 fun Badge(
     text: String,
@@ -239,7 +262,6 @@ fun Badge(
     textColor: Color = Color.White,
     modifier: Modifier = Modifier
 ) {
-
     Text(
         text = text.uppercase().substringBefore(" "),
         color = textColor,
@@ -257,7 +279,6 @@ fun Badge(
 @Preview(name = "Dark Mode", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 fun GameCardPreview() {
-
     val sampleGame = GameCardItem(
         id = "1",
         listingIndex = 1,

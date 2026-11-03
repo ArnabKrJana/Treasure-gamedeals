@@ -7,15 +7,31 @@ import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,15 +47,29 @@ import com.example.treasure.data.local.entity.DealCategory
 import com.example.treasure.data.local.entity.DealEntity
 import com.example.treasure.domain.uiModels.Price
 import com.example.treasure.ui.theme.TreasureTheme
-import com.example.treasure.ui.uiComponents.*
-import com.example.treasure.ui.viewModels.DetailViewModel
 import com.example.treasure.ui.uiComponents.ActionStatus
+import com.example.treasure.ui.uiComponents.DetailInfoRow
+import com.example.treasure.ui.uiComponents.ExpandableText
+import com.example.treasure.ui.uiComponents.FullScreenImageOverlay
+import com.example.treasure.ui.uiComponents.GameHeader
+import com.example.treasure.ui.uiComponents.MediaGalleryRow
+import com.example.treasure.ui.uiComponents.SystemRequirementsSection
+import com.example.treasure.ui.uiComponents.VideoPlayerOverlay
+import com.example.treasure.ui.viewModels.DetailViewModel
 import com.example.treasure.utils.Constants.WEB_CLIENT_ID
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 
+/**
+ * Stateful Composable screen displaying comprehensive game details, metadata, trailers, screenshots,
+ * and system specifications.
+ *
+ * Coordinates between Room-cached deal details, local wallpaper downloading, and Google Drive cloud syncing.
+ *
+ * @param viewModel Injected [DetailViewModel] providing game state and event callbacks.
+ */
 @Composable
 fun DetailScreen(
     viewModel: DetailViewModel = hiltViewModel()
@@ -50,11 +80,9 @@ fun DetailScreen(
         .collectAsState(initial = emptyList())
     val isFavorite = wishlistItems.any { it.gameId == gameDetail?.id }
 
-    // --- 1. Collect the dynamically updating state maps ---
     val downloadStatuses by viewModel.downloadStatuses.collectAsStateWithLifecycle()
     val uploadStatuses by viewModel.uploadStatuses.collectAsStateWithLifecycle()
 
-    // --- 2. Google Drive Authorization Flow ---
     val context = LocalContext.current
     var pendingImageUrl by remember { mutableStateOf<String?>(null) }
 
@@ -76,10 +104,9 @@ fun DetailScreen(
                 Log.e("DRIVE_AUTH", "Auth failed", e)
             }
         }
-        pendingImageUrl = null // Clear the pending image after attempting auth
+        pendingImageUrl = null
     }
 
-    // Listens for the ViewModel saying "Hey, the user isn't linked to Drive yet!"
     LaunchedEffect(Unit) {
         viewModel.driveAuthEvent.collect {
             driveAuthLauncher.launch(getDriveSyncIntent(context))
@@ -100,6 +127,19 @@ fun DetailScreen(
     )
 }
 
+/**
+ * Stateless UI container rendering the game details view, including the backdrop header, metadata rows,
+ * media galleries, system requirements, and fullscreen image/video overlays.
+ *
+ * @param gameDetail The [DealEntity] details record to display.
+ * @param isFavorite Whether this game currently exists in the user's wishlist.
+ * @param onToggleFavorite Callback triggered when the floating favorite action button is tapped.
+ * @param downloadStatuses Mapping of media URLs to their local filesystem download status.
+ * @param uploadStatuses Mapping of media URLs to their cloud upload/sync status.
+ * @param onDownloadLocalClick Callback invoked to trigger a local wallpaper download.
+ * @param onDriveSyncClick Callback invoked to initiate a Google Drive wallpaper sync.
+ * @param modifier Layout modifier applied to the parent container.
+ */
 @Composable
 fun DetailScreenContent(
     gameDetail: DealEntity?,
@@ -146,7 +186,6 @@ fun DetailScreenContent(
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                 ) {
-                    // 1. Header
                     GameHeader(
                         bannerUrl = gameDetail.screenshots?.firstOrNull() ?: gameDetail.thumbnail,
                         thumbnailUrl = gameDetail.thumbnail
@@ -161,7 +200,6 @@ fun DetailScreenContent(
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
 
-                        // 2. Info Rows
                         DetailInfoRow(
                             stringResource(R.string.genre_label),
                             gameDetail.genres?.joinToString(", ") ?: "N/A"
@@ -199,12 +237,10 @@ fun DetailScreenContent(
                             modifier = Modifier.padding(top = 24.dp, bottom = 8.dp)
                         )
 
-                        // 3. Expandable Text
                         ExpandableText(
                             text = gameDetail.description ?: "No description available."
                         )
 
-                        // 4. Horizontal Trailer & Screenshot Gallery
                         MediaGalleryRow(
                             trailerUrl = gameDetail.trailerUrl,
                             thumbnailUrl = gameDetail.thumbnail,
@@ -213,7 +249,6 @@ fun DetailScreenContent(
                             onScreenshotClick = { index -> selectedScreenshotIndex = index }
                         )
 
-                        // 5. System Requirements
                         SystemRequirementsSection(
                             currentStore = gameDetail.storeId?.replaceFirstChar { it.uppercase() }
                                 ?: "Store",
@@ -226,17 +261,15 @@ fun DetailScreenContent(
                 }
             }
 
-            // --- FULL SCREEN OVERLAYS --- //
-
             selectedScreenshotIndex?.let { index ->
                 FullScreenImageOverlay(
                     screenshots = gameDetail?.screenshots ?: emptyList(),
                     initialIndex = index,
-                    downloadStatuses = downloadStatuses, // Supplied directly by ViewModel Map
-                    uploadStatuses = uploadStatuses,     // Supplied directly by ViewModel Map
+                    downloadStatuses = downloadStatuses,
+                    uploadStatuses = uploadStatuses,
                     onDismiss = { selectedScreenshotIndex = null },
-                    onDownloadLocalClick = onDownloadLocalClick, // Triggers ViewModel local download action
-                    onDriveSyncClick = onDriveSyncClick          // Triggers ViewModel RabbitMQ queue action
+                    onDownloadLocalClick = onDownloadLocalClick,
+                    onDriveSyncClick = onDriveSyncClick
                 )
             }
 
@@ -252,9 +285,13 @@ fun DetailScreenContent(
     }
 }
 
-// Place this outside your composables
+/**
+ * Builds an explicit [Intent] launching Google Sign-In with Google Drive scopes for cloud wallpaper backups.
+ *
+ * @param context Android context used to initialize Google Sign-In client.
+ * @return Configured Google Sign-In [Intent].
+ */
 fun getDriveSyncIntent(context: Context): Intent {
-
     val webClientId = WEB_CLIENT_ID
 
     val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -264,10 +301,12 @@ fun getDriveSyncIntent(context: Context): Intent {
         .build()
 
     val client = GoogleSignIn.getClient(context, gso)
-//    client.signOut()
     return client.signInIntent
 }
 
+/**
+ * Preview Composable for [DetailScreenContent].
+ */
 @Preview(showBackground = true)
 @Composable
 fun DetailScreenPreview() {

@@ -4,13 +4,21 @@ import com.example.treasure.data.local.entity.DealCategory
 import com.example.treasure.data.local.entity.DealEntity
 import com.example.treasure.data.local.entity.SystemRequirementEntity
 import com.example.treasure.data.remote.dto.GameDto
-import com.example.treasure.domain.uiModels.RequirementType
 import com.example.treasure.domain.uiModels.Price
-
-// Use aliases to prevent import clashes between the two StoreDeals
+import com.example.treasure.domain.uiModels.RequirementType
 import com.example.treasure.data.remote.dto.StoreDeal as DtoStoreDeal
 import com.example.treasure.domain.uiModels.StoreDeal as UiStoreDeal
 
+/**
+ * Transforms a remote [GameDto] payload into a persistent [DealEntity] tailored for Room database storage.
+ *
+ * Maps list feed fields, computes default price fallbacks, normalizes alternative storefront pricing models,
+ * and parses system hardware requirement specifications into strongly-typed [RequirementType] tiers.
+ *
+ * @param category Target [DealCategory] partition (e.g., [DealCategory.HOT_DEALS], [DealCategory.SEARCH]).
+ * @param listingIndex Positional index within the category feed for deterministic sorting.
+ * @return Fully initialized [DealEntity] ready for database insertion.
+ */
 fun GameDto.toEntity(category: DealCategory, listingIndex: Int): DealEntity {
     return DealEntity(
         id = this.id,
@@ -25,7 +33,6 @@ fun GameDto.toEntity(category: DealCategory, listingIndex: Int): DealEntity {
         upVoteColor = this.upVoteColor,
         category = category,
         platforms = this.platforms,
-
         description = this.description,
         screenshots = this.screenshots,
         trailerUrl = this.trailerUrl,
@@ -35,8 +42,6 @@ fun GameDto.toEntity(category: DealCategory, listingIndex: Int): DealEntity {
         franchise = this.franchise,
         releaseDate = this.releaseDate,
         maturityRating = this.maturityRating,
-
-        // Map the DTO StoreDeal to the UI StoreDeal
         otherStores = this.otherStores?.map { dtoStoreDeal ->
             UiStoreDeal(
                 storeName = dtoStoreDeal.storeName,
@@ -47,7 +52,6 @@ fun GameDto.toEntity(category: DealCategory, listingIndex: Int): DealEntity {
                 )
             )
         },
-
         systemRequirements = this.systemRequirements?.map {
             SystemRequirementEntity(
                 specName = it.specName,

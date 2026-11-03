@@ -22,6 +22,16 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.treasure.utils.navigation.MainScreen
 
+/**
+ * Persistent bottom navigation bar composable hosting the primary application destination tabs.
+ *
+ * Integrates with Navigation Compose:
+ * - Detects active route hierarchy using [hasRoute].
+ * - Implements single-top navigation with state preservation (`saveState = true`, `restoreState = true`).
+ * - Features vertical gradient background blending smoothly into surface themes.
+ *
+ * @param navController Navigation host controller driving tab transitions.
+ */
 @Composable
 fun BottomNavBar(navController: NavHostController) {
     val screenList = listOf(
@@ -32,7 +42,6 @@ fun BottomNavBar(navController: NavHostController) {
     )
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-
 
     Box(
         modifier = Modifier.background(

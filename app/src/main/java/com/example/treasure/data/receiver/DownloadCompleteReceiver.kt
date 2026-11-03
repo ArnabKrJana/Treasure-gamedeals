@@ -12,12 +12,33 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/**
+ * System [BroadcastReceiver] listening for platform [DownloadManager.ACTION_DOWNLOAD_COMPLETE] broadcasts.
+ *
+ * Reconciles the terminal download status reported by the system [DownloadManager] with the local
+ * [DownloadedAssetDao] tracking table:
+ * - If [DownloadManager.STATUS_SUCCESSFUL]: Retains the database record, maintaining the "Downloaded" state in UI.
+ * - If [DownloadManager.STATUS_FAILED]: Evicts the tracking record from [DownloadedAssetDao], resetting the UI action button back to "Download".
+ */
 @AndroidEntryPoint
 class DownloadCompleteReceiver : BroadcastReceiver() {
 
+    companion object {
+        private const val TAG = "DownloadReceiver"
+    }
+
+    /**
+     * Injected DAO for managing downloaded wallpaper records in local Room persistence.
+     */
     @Inject
     lateinit var downloadedAssetDao: DownloadedAssetDao
 
+    /**
+     * Handles incoming broadcast intents from the Android DownloadManager service.
+     *
+     * @param context Host Android context.
+     * @param intent Received broadcast intent containing the system download ID.
+     */
     override fun onReceive(context: Context?, intent: Intent?) {
         if (intent?.action == DownloadManager.ACTION_DOWNLOAD_COMPLETE) {
             val downloadId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
@@ -37,11 +58,9 @@ class DownloadCompleteReceiver : BroadcastReceiver() {
 
                         if (asset != null) {
                             if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                                Log.d("DownloadReceiver", "Successfully downloaded: ${asset.fileName}")
-                                // It's already in the DB as pending, so we just leave it to keep the UI checked!
+                                Log.d(TAG, "Successfully downloaded: ${asset.fileName}")
                             } else if (status == DownloadManager.STATUS_FAILED) {
-                                Log.e("DownloadReceiver", "Failed to download: ${asset.fileName}")
-                                // Delete it so the UI reverts from a "Checked" icon back to the "Download" icon
+                                Log.e(TAG, "Failed to download: ${asset.fileName}")
                                 downloadedAssetDao.delete(asset)
                             }
                         }

@@ -1,9 +1,25 @@
 package com.example.treasure.ui.uiComponents
 
 import android.content.res.Configuration.UI_MODE_NIGHT_YES
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -17,20 +33,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
+/**
+ * Animated shimmer loading placeholder composable matching the dimensions and layout of [GameCard].
+ *
+ * Implements an infinite translation sweep animation (`FastOutSlowInEasing`) across a linear gradient brush
+ * to provide visual feedback while catalog feeds are loading.
+ *
+ * @param modifier Composable modifier customizing card dimensions. Defaults to standard 175dp width and 0.65 aspect ratio.
+ */
 @Composable
 fun AnimatedShimmer(
     modifier: Modifier = Modifier
-        .width(175.dp) // Default width for HomeScreen
-        .aspectRatio(0.65f) // Matches GameCard aspect ratio
+        .width(175.dp)
+        .aspectRatio(0.65f)
 ) {
-    // 1. Define Colors (Neutral Grays for loading)
     val shimmerColors = listOf(
         Color.LightGray.copy(alpha = 0.6f),
         Color.LightGray.copy(alpha = 0.2f),
         Color.LightGray.copy(alpha = 0.6f),
     )
 
-    // 2. Setup Transition
     val transition = rememberInfiniteTransition(label = "Shimmer")
     val translateAnim = transition.animateFloat(
         initialValue = 0f,
@@ -45,7 +67,6 @@ fun AnimatedShimmer(
         label = "ShimmerTranslate"
     )
 
-    // 3. Create the Moving Brush
     val brush = Brush.linearGradient(
         colors = shimmerColors,
         start = Offset.Zero,
@@ -55,17 +76,22 @@ fun AnimatedShimmer(
     CardShimmerItem(brush = brush, modifier = modifier)
 }
 
+/**
+ * Structural skeleton card matching [GameCard] item zones (55% cover image, badge, title lines, prices, heart).
+ *
+ * @param brush The moving linear gradient [Brush] driving the shimmering effect.
+ * @param modifier Composable modifier for the card container.
+ */
 @Composable
 fun CardShimmerItem(brush: Brush, modifier: Modifier = Modifier) {
     Card(
-        modifier = modifier.padding(4.dp), // Matches GameCard padding
-        shape = RoundedCornerShape(16.dp), // Matches GameCard radius
+        modifier = modifier.padding(4.dp),
+        shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
-            // --- TOP: Image Placeholder (55% of card) ---
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -78,7 +104,6 @@ fun CardShimmerItem(brush: Brush, modifier: Modifier = Modifier) {
                     )
                     .background(brush)
             ) {
-                // Store Badge Placeholder
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -86,12 +111,10 @@ fun CardShimmerItem(brush: Brush, modifier: Modifier = Modifier) {
                         .width(42.dp)
                         .height(14.dp)
                         .clip(RoundedCornerShape(7.dp))
-                        // Make it slightly darker/distinct from the main brush
                         .background(Color.Gray.copy(alpha = 0.3f))
                 )
             }
 
-            // --- BOTTOM: Details Placeholders (45% of card) ---
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -99,7 +122,6 @@ fun CardShimmerItem(brush: Brush, modifier: Modifier = Modifier) {
                     .padding(8.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Title Lines (2 lines to mimic maxLines = 2)
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Box(
                         modifier = Modifier
@@ -117,22 +139,17 @@ fun CardShimmerItem(brush: Brush, modifier: Modifier = Modifier) {
                     )
                 }
 
-                // Price Row Placeholder
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Current Price
                     Box(modifier = Modifier.height(16.dp).width(45.dp).clip(RoundedCornerShape(4.dp)).background(brush))
-                    // Original Price
                     Box(modifier = Modifier.height(12.dp).width(35.dp).clip(RoundedCornerShape(4.dp)).background(brush))
                     Spacer(modifier = Modifier.weight(1f))
-                    // Discount Badge Placeholder
                     Box(modifier = Modifier.height(16.dp).width(30.dp).clip(RoundedCornerShape(7.dp)).background(brush))
                 }
 
-                // Bottom Row (Favorite Icon)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.Start,
@@ -141,7 +158,7 @@ fun CardShimmerItem(brush: Brush, modifier: Modifier = Modifier) {
                     Box(
                         modifier = Modifier
                             .size(24.dp)
-                            .clip(RoundedCornerShape(12.dp)) // Circular placeholder for the heart
+                            .clip(RoundedCornerShape(12.dp))
                             .background(brush)
                     )
                 }
