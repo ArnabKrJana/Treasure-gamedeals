@@ -1,27 +1,49 @@
 package com.example.treasure.ui.uiComponents
 
-
 import android.content.res.Configuration
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TopAppBarScrollBehavior
+import androidx.compose.material3.rememberTopAppBarState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
@@ -33,7 +55,23 @@ import coil3.compose.AsyncImage
 import com.example.treasure.data.local.entity.enums.Role
 import com.example.treasure.domain.uiModels.User
 
-
+/**
+ * Top application bar component with dynamic scroll-linked styling, profile controls, and badges.
+ *
+ * Smoothly interpolates title opacity and action button pill backgrounds based on the
+ * nested scroll offset provided by [scrollBehavior].
+ *
+ * @param title The text displayed as the primary app bar title.
+ * @param canNavigateBack Whether to display an auto-mirrored back navigation icon.
+ * @param isSettingScreen Flag indicating if the current screen is the Settings view (hiding notifications & profile).
+ * @param notificationCount Number of unread alerts displayed on the notification bell badge.
+ * @param currentUser The currently authenticated [User] profile, or null if guest / unauthenticated.
+ * @param scrollBehavior Scroll behavior controller linking the app bar state to scrollable body content.
+ * @param onBackBtnClick Invoked when the back navigation arrow is clicked.
+ * @param onNotificationBtnClick Invoked when the notification bell action is clicked.
+ * @param onLogoutClick Callback triggered when the user chooses "Log out" from the profile menu.
+ * @param onDeleteAccountClick Callback triggered when the user confirms account deletion.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopAppBarComponent(
@@ -51,24 +89,20 @@ fun TopAppBarComponent(
     var showProfileMenu by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    // 1. Detect if the user has scrolled down (offset goes negative as you scroll down)
     val isScrolled = scrollBehavior.state.contentOffset < -40f
 
-    // 2. Animate Title Opacity (Fades out when scrolled)
     val titleAlpha by animateFloatAsState(
         targetValue = if (isScrolled) 0f else 1f,
         animationSpec = tween(durationMillis = 500),
         label = "TitleAlpha"
     )
 
-    // 3. Animate Icon Backgrounds (Creates the floating circular pill effect over content)
     val floatingIconBg by animateColorAsState(
         targetValue = if (isScrolled) Color.Black.copy(alpha = 0.5f) else Color.Transparent,
         animationSpec = tween(durationMillis = 500),
         label = "IconBg"
     )
 
-    // Optional: Animate icon tint so they turn white when floating over a dark pill
     val floatingIconTint by animateColorAsState(
         targetValue = if (isScrolled) Color.White else MaterialTheme.colorScheme.onSurface,
         animationSpec = tween(durationMillis = 500),
@@ -81,7 +115,6 @@ fun TopAppBarComponent(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
-                // Apply the fading alpha here
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = titleAlpha)
             )
         },
@@ -91,7 +124,7 @@ fun TopAppBarComponent(
                     onClick = onBackBtnClick,
                     modifier = Modifier
                         .padding(start = 8.dp)
-                        .background(floatingIconBg, CircleShape) // Floating background
+                        .background(floatingIconBg, CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -103,13 +136,12 @@ fun TopAppBarComponent(
         },
         actions = {
             if (!isSettingScreen) {
-                // Notifications
                 IconButton(
                     onClick = onNotificationBtnClick,
                     modifier = Modifier.background(
                         floatingIconBg,
                         CircleShape
-                    ) // Floating background
+                    )
                 ) {
                     BadgedBox(
                         badge = {
@@ -130,7 +162,6 @@ fun TopAppBarComponent(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
-                // Profile Menu
                 if (currentUser != null) {
                     Box(modifier = Modifier.padding(end = 8.dp)) {
                         IconButton(
@@ -138,7 +169,7 @@ fun TopAppBarComponent(
                             modifier = Modifier.background(
                                 floatingIconBg,
                                 CircleShape
-                            ) // Floating background
+                            )
                         ) {
                             if (currentUser.profilePicture != null) {
                                 AsyncImage(
@@ -148,7 +179,6 @@ fun TopAppBarComponent(
                                     modifier = Modifier
                                         .size(32.dp)
                                         .clip(CircleShape)
-
                                 )
                             } else {
                                 Icon(
@@ -178,7 +208,6 @@ fun TopAppBarComponent(
             }
         },
         scrollBehavior = scrollBehavior,
-        // FORCE the background to always be transparent, no matter the scroll state
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = Color.Transparent,
             scrolledContainerColor = Color.Transparent,
@@ -196,7 +225,15 @@ fun TopAppBarComponent(
     }
 }
 
-// ... [Keep your existing ProfileDropdownMenu and DeleteAccountDialog here] ...
+/**
+ * Overflow dropdown menu anchored to the profile avatar icon, presenting user account info and actions.
+ *
+ * @param expanded Whether the dropdown menu is currently visible.
+ * @param user The authenticated user data model.
+ * @param onDismiss Invoked when the user dismisses the dropdown menu.
+ * @param onLogoutClick Invoked when the logout action is tapped.
+ * @param onDeleteClick Invoked when the delete account action is tapped.
+ */
 @Composable
 private fun ProfileDropdownMenu(
     expanded: Boolean,
@@ -247,6 +284,12 @@ private fun ProfileDropdownMenu(
     }
 }
 
+/**
+ * Confirmation dialog shown before irrevocably deleting the user's account and personal cloud sync data.
+ *
+ * @param onConfirm Invoked when the destructive deletion action is confirmed.
+ * @param onDismiss Invoked when the user cancels or dismisses the dialog.
+ */
 @Composable
 private fun DeleteAccountDialog(
     onConfirm: () -> Unit,
@@ -301,6 +344,9 @@ private fun DeleteAccountDialog(
     )
 }
 
+/**
+ * Preview Composable for [TopAppBarComponent] in home screen configuration with dark/light themes.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Preview(
     name = "Phone - Light",
@@ -327,14 +373,11 @@ private fun DeleteAccountDialog(
 )
 @Composable
 fun TopAppBarPreview_Home() {
-
-    val scrollBehavior =
-        TopAppBarDefaults.enterAlwaysScrollBehavior(
-            state = rememberTopAppBarState()
-        )
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(
+        state = rememberTopAppBarState()
+    )
 
     MaterialTheme {
-
         TopAppBarComponent(
             title = "Treasure",
             canNavigateBack = false,
@@ -356,6 +399,9 @@ fun TopAppBarPreview_Home() {
     }
 }
 
+/**
+ * Preview Composable for [TopAppBarComponent] in detail screen configuration with back navigation.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Preview(
     name = "Detail Screen",
@@ -364,14 +410,11 @@ fun TopAppBarPreview_Home() {
 )
 @Composable
 fun TopAppBarPreview_Detail() {
-
-    val scrollBehavior =
-        TopAppBarDefaults.enterAlwaysScrollBehavior(
-            state = rememberTopAppBarState()
-        )
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(
+        state = rememberTopAppBarState()
+    )
 
     MaterialTheme {
-
         TopAppBarComponent(
             title = "Game Details",
             canNavigateBack = true,

@@ -22,19 +22,31 @@ import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 /**
- * Synchronizes prices for the user's locally stored wishlist.
+ * Periodic background [CoroutineWorker] that monitors price drops and hikes for wishlisted games.
  *
- * Price changes are calculated against the previously synchronized price
- * stored in [UserInteractionEntity.latestSyncedPrice].
+ * Managed by Android Jetpack [androidx.work.WorkManager] under system execution constraints:
+ * - Network Type: Connected ([androidx.work.NetworkType.CONNECTED])
+ * - Battery: Not Low ([androidx.work.Constraints.Builder.setRequiresBatteryNotLow])
  *
- * First successful sync:
- *      Establishes the initial price baseline.
+ * Synchronization & Baseline Mechanics:
+ * 1. Evaluates user configuration in [SettingsRepository] to check whether notifications are enabled.
+ * 2. Queries local Room database ([UserInteractionEntity]) for active wishlisted items.
+ * 3. Polls the backend BFF endpoint [TreasureBackendApi.getWishlistPrices] for current store prices.
+ * 4. Baseline Evaluation:
+ *    - First Sync: If [UserInteractionEntity.latestSyncedPrice] is null or zero, establishes the baseline.
+ *    - Subsequent Sync: Computes relative price change `(newPrice - previousPrice) / previousPrice`.
+ * 5. Notification Dispatch:
+ *    - If `abs(changePercent)` meets or exceeds user threshold, persists a [NotificationEntity] in Room
+ *      and delegates system notification presentation to [PriceNotificationManager].
+ * 6. Updates [UserInteractionEntity.latestSyncedPrice] and timestamp in an atomic Room transaction.
  *
- * Subsequent sync:
- *      Compares the new price against the previous synchronized price.
- *
- * If the absolute percentage change reaches or exceeds the user's configured threshold,
- * a notification is created and displayed.
+ * @param appContext Android system context provided by WorkManager.
+ * @param workerParams Execution runtime parameters and constraints provided by WorkManager.
+ * @param database Injected Room [TreasureDatabase] providing transactional access to user interactions and notifications.
+ * @param treasureBackendApi Injected Retrofit client for querying remote wishlist prices.
+ * @param settingsRepository Injected DataStore repository providing notification flags and threshold preferences.
+ * @param priceNotificationManager Injected platform notification manager for displaying single and batched alerts.
+ * @param ioDispatcher Injected [CoroutineDispatcher] providing background thread execution.
  */
 @HiltWorker
 class PriceSyncWorker @AssistedInject constructor(
@@ -52,162 +64,82 @@ class PriceSyncWorker @AssistedInject constructor(
 
     private val gson = Gson()
 
-    init {
-        Log.d(
-            TAG,
-            "========== WORKER INSTANCE CREATED =========="
-        )
+    companion object {
+        private const val TAG = "PriceSyncWorker"
+        private const val SERVER_ERROR_MIN = 500
+        private const val SERVER_ERROR_MAX = 599
+        private const val HTTP_TOO_MANY_REQUESTS = 429
     }
 
+    init {
+        Log.d(TAG, "Worker instance created")
+    }
+
+    /**
+     * Entry point for WorkManager execution. Dispatches workload to [workDefinition] on [ioDispatcher].
+     *
+     * @return [Result.success] on normal completion, [Result.retry] on transient errors, or [Result.failure].
+     */
     override suspend fun doWork(): Result {
-
-        Log.d(
-            TAG,
-            "========== DO WORK STARTED =========="
-        )
-
+        Log.d(TAG, "Price synchronization work started")
         return workDefinition()
     }
 
+    /**
+     * Executes the complete price polling, baseline comparison, and notification dispatch lifecycle.
+     *
+     * @return Execution result indicating success, retry requirement, or failure.
+     */
     private suspend fun workDefinition(): Result =
         withContext(ioDispatcher) {
-
             try {
-
-                Log.d(
-                    TAG,
-                    "Checking notification settings..."
-                )
-
-                val areNotificationsEnabled =
-                    settingsRepository
-                        .areNotificationsEnabled
-                        .first()
-
-                Log.d(
-                    TAG,
-                    "Notifications enabled = $areNotificationsEnabled"
-                )
+                Log.d(TAG, "Checking notification settings...")
+                val areNotificationsEnabled = settingsRepository.areNotificationsEnabled.first()
+                Log.d(TAG, "Notifications enabled = $areNotificationsEnabled")
 
                 if (!areNotificationsEnabled) {
-
-                    Log.d(
-                        TAG,
-                        "Notifications disabled. Worker stopping."
-                    )
-
+                    Log.d(TAG, "Notifications disabled. Worker stopping.")
                     return@withContext Result.success()
                 }
 
-                val thresholdPercent =
-                    settingsRepository
-                        .notifyThreshold
-                        .first()
+                val thresholdPercent = settingsRepository.notifyThreshold.first()
+                val thresholdDecimal = thresholdPercent / 100.0
+                Log.d(TAG, "Notification threshold = $thresholdPercent%")
 
-                val thresholdDecimal =
-                    thresholdPercent / 100.0
-
-                Log.d(
-                    TAG,
-                    "Notification threshold = $thresholdPercent%"
-                )
-
-                Log.d(
-                    TAG,
-                    "Reading local favorites..."
-                )
-
-                val wishlistItems =
-                    database
-                        .userInteractionDao()
-                        .getFavorites()
-                        .first()
-
-                Log.d(
-                    TAG,
-                    "Local favorites count = ${wishlistItems.size}"
-                )
+                Log.d(TAG, "Reading local favorites...")
+                val wishlistItems = database.userInteractionDao().getFavorites().first()
+                Log.d(TAG, "Local favorites count = ${wishlistItems.size}")
 
                 if (wishlistItems.isEmpty()) {
-
-                    Log.d(
-                        TAG,
-                        "No favorites found. Worker stopping."
-                    )
-
+                    Log.d(TAG, "No favorites found. Worker stopping.")
                     return@withContext Result.success()
                 }
 
-                Log.d(
-                    TAG,
-                    "Calling backend getWishlistPrices()..."
-                )
-
-                val response =
-                    treasureBackendApi.getWishlistPrices()
-
-                Log.d(
-                    TAG,
-                    "Backend response code = ${response.code()}"
-                )
+                Log.d(TAG, "Calling backend getWishlistPrices()...")
+                val response = treasureBackendApi.getWishlistPrices()
+                Log.d(TAG, "Backend response code = ${response.code()}")
 
                 if (!response.isSuccessful || response.body() == null) {
-
                     val code = response.code()
+                    Log.e(TAG, "Backend price request failed with HTTP $code")
 
-                    Log.e(
-                        TAG,
-                        "Backend price request FAILED. HTTP $code"
-                    )
-
-                    return@withContext if (
-                        code in 500..599 || code == 429
-                    ) {
-
-                        Log.d(
-                            TAG,
-                            "Returning RETRY"
-                        )
-
+                    return@withContext if (code in SERVER_ERROR_MIN..SERVER_ERROR_MAX || code == HTTP_TOO_MANY_REQUESTS) {
+                        Log.d(TAG, "Returning RETRY")
                         Result.retry()
-
                     } else {
-
-                        Log.d(
-                            TAG,
-                            "Returning FAILURE"
-                        )
-
+                        Log.d(TAG, "Returning FAILURE")
                         Result.failure()
                     }
                 }
 
-                /*
-                 * Backend currently returns:
-                 * {
-                 *   "gameId": "{\"current\":1000.66,\"original\":3338.71}"
-                 * }
-                 * Therefore, the Retrofit type remains Map<String, String>
-                 * and each String must be parsed as JSON.
-                 */
-                val remotePricesMap =
-                    response.body()!!
+                val remotePricesMap = response.body()!!
+                Log.d(TAG, "Remote prices received: $remotePricesMap")
 
-                Log.d(
-                    TAG,
-                    "Remote prices received: $remotePricesMap"
-                )
-
-                val changedGames =
-                    mutableListOf<NotificationEntity>()
-
-                val updatedInteractions =
-                    mutableListOf<UserInteractionEntity>()
+                val changedGames = mutableListOf<NotificationEntity>()
+                val updatedInteractions = mutableListOf<UserInteractionEntity>()
 
                 wishlistItems.forEach { localItem ->
-
-                    val remotePriceJson =
-                        remotePricesMap[localItem.gameId]
+                    val remotePriceJson = remotePricesMap[localItem.gameId]
 
                     Log.d(
                         TAG,
@@ -222,46 +154,24 @@ class PriceSyncWorker @AssistedInject constructor(
                     )
 
                     if (remotePriceJson == null) {
-
-                        Log.d(
-                            TAG,
-                            "No remote price found for gameId=${localItem.gameId}"
-                        )
-
+                        Log.d(TAG, "No remote price found for gameId=${localItem.gameId}")
                         return@forEach
                     }
 
                     val remotePriceDto: WishlistPriceDto?
-
                     try {
-
-                        remotePriceDto =
-                            gson.fromJson(
-                                remotePriceJson,
-                                WishlistPriceDto::class.java
-                            )
-
-                    } catch (e: Exception) {
-
-                        Log.e(
-                            TAG,
-                            "Failed to parse remote price for gameId=${localItem.gameId}: $remotePriceJson",
-                            e
+                        remotePriceDto = gson.fromJson(
+                            remotePriceJson,
+                            WishlistPriceDto::class.java
                         )
-
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse remote price for gameId=${localItem.gameId}: $remotePriceJson", e)
                         return@forEach
                     }
 
-                    val newPrice =
-                        remotePriceDto?.current
-
+                    val newPrice = remotePriceDto?.current
                     if (newPrice == null) {
-
-                        Log.d(
-                            TAG,
-                            "Remote price current value is null for ${localItem.gameId}"
-                        )
-
+                        Log.d(TAG, "Remote price current value is null for ${localItem.gameId}")
                         return@forEach
                     }
 
@@ -289,39 +199,20 @@ class PriceSyncWorker @AssistedInject constructor(
                         """.trimIndent()
                     )
 
-                    /*
-                     * First successful sync for this game.
-                     *
-                     * There is no previous price to compare against,
-                     * so simply establish the initial baseline.
-                     */
                     if (previousPrice <= 0.0) {
-
-                        Log.d(
-                            TAG,
-                            "No previous price available. Establishing initial price = $newPrice"
-                        )
-
+                        Log.d(TAG, "No previous price available. Establishing initial price = $newPrice")
                         updatedInteractions.add(
                             localItem.copy(
                                 latestSyncedPrice = newPrice,
                                 lastSyncTimestamp = System.currentTimeMillis()
                             )
                         )
-
                         return@forEach
                     }
 
-                    /*
-                     * Compare the NEW price against the PREVIOUSLY SYNCED price.
-                     */
                     val diff = newPrice - previousPrice
-
-                    val changePercent =
-                        diff / previousPrice
-
-                    val absoluteChangePercent =
-                        abs(changePercent) * 100
+                    val changePercent = diff / previousPrice
+                    val absoluteChangePercent = abs(changePercent) * 100
 
                     Log.d(
                         TAG,
@@ -337,12 +228,7 @@ class PriceSyncWorker @AssistedInject constructor(
                         """.trimIndent()
                     )
 
-                    /*
-                     * Always update the baseline after successfully
-                     * receiving a valid price.
-                     */
                     if (previousPrice != newPrice) {
-
                         updatedInteractions.add(
                             localItem.copy(
                                 latestSyncedPrice = newPrice,
@@ -351,17 +237,8 @@ class PriceSyncWorker @AssistedInject constructor(
                         )
                     }
 
-                    /*
-                     * Notify only when the change from the PREVIOUS
-                     * known price exceeds or equals the configured threshold.
-                     */
                     if (abs(changePercent) >= thresholdDecimal) {
-
-                        Log.d(
-                            TAG,
-                            "!!! NOTIFICATION THRESHOLD REACHED !!!"
-                        )
-
+                        Log.d(TAG, "Notification threshold reached for ${localItem.title}")
                         changedGames.add(
                             NotificationEntity(
                                 gameId = localItem.gameId,
@@ -371,145 +248,65 @@ class PriceSyncWorker @AssistedInject constructor(
                                 newPrice = newPrice
                             )
                         )
-
                     } else {
-
-                        Log.d(
-                            TAG,
-                            "Below notification threshold."
-                        )
+                        Log.d(TAG, "Below notification threshold.")
                     }
                 }
 
-                Log.d(
-                    TAG,
-                    "Games requiring price update = ${updatedInteractions.size}"
-                )
+                Log.d(TAG, "Games requiring price update = ${updatedInteractions.size}")
+                Log.d(TAG, "Games requiring notification = ${changedGames.size}")
 
-                Log.d(
-                    TAG,
-                    "Games requiring notification = ${changedGames.size}"
-                )
-
-                /*
-                 * Save latest synced prices.
-                 */
                 if (updatedInteractions.isNotEmpty()) {
-
-                    Log.d(
-                        TAG,
-                        "Updating local interaction prices..."
-                    )
-
+                    Log.d(TAG, "Updating local interaction prices...")
                     database.withTransaction {
-
                         updatedInteractions.forEach { interaction ->
-
-                            database
-                                .userInteractionDao()
-                                .insertInteraction(interaction)
+                            database.userInteractionDao().insertInteraction(interaction)
                         }
                     }
-
-                    Log.d(
-                        TAG,
-                        "Local price updates completed"
-                    )
+                    Log.d(TAG, "Local price updates completed")
                 }
 
-                /*
-                 * Save notification records and show
-                 * Android notifications.
-                 */
                 processNotifications(changedGames)
 
-                Log.d(
-                    TAG,
-                    "========== WORKER SUCCEEDED =========="
-                )
-
+                Log.d(TAG, "Price synchronization worker succeeded")
                 Result.success()
 
             } catch (e: Exception) {
-
-                Log.e(
-                    TAG,
-                    "========== WORKER EXCEPTION ==========",
-                    e
-                )
-
-                /*
-                 * Network / unexpected errors should be retried
-                 * by WorkManager.
-                 */
+                Log.e(TAG, "Price synchronization worker encountered an exception", e)
                 Result.retry()
             }
         }
 
+    /**
+     * Persists price fluctuation alert records to the database and dispatches platform notifications.
+     *
+     * @param changedGames List of games whose price change exceeded the user's notification threshold.
+     */
     private suspend fun processNotifications(
         changedGames: List<NotificationEntity>
     ) {
-
-        Log.d(
-            TAG,
-            "processNotifications(): ${changedGames.size} games"
-        )
+        Log.d(TAG, "processNotifications(): ${changedGames.size} games")
 
         if (changedGames.isEmpty()) {
-
-            Log.d(
-                TAG,
-                "No notifications to process."
-            )
-
+            Log.d(TAG, "No notifications to process.")
             return
         }
 
         database.withTransaction {
-
             changedGames.forEach {
-
-                Log.d(
-                    TAG,
-                    "Saving notification DB record: ${it.gameId}"
-                )
-
-                database
-                    .notificationDao()
-                    .insertNotification(it)
+                Log.d(TAG, "Saving notification DB record: ${it.gameId}")
+                database.notificationDao().insertNotification(it)
             }
         }
 
-        Log.d(
-            TAG,
-            "Notification DB records saved."
-        )
+        Log.d(TAG, "Notification DB records saved.")
 
         if (changedGames.size == 1) {
-
-            Log.d(
-                TAG,
-                "Showing SINGLE notification"
-            )
-
-            priceNotificationManager.showSingleGameNotification(
-                changedGames.first()
-            )
-
+            Log.d(TAG, "Showing SINGLE notification")
+            priceNotificationManager.showSingleGameNotification(changedGames.first())
         } else {
-
-            Log.d(
-                TAG,
-                "Showing BATCHED notification: ${changedGames.size}"
-            )
-
-            priceNotificationManager.showBatchedNotification(
-                changedGames
-            )
+            Log.d(TAG, "Showing BATCHED notification: ${changedGames.size}")
+            priceNotificationManager.showBatchedNotification(changedGames)
         }
-    }
-
-    companion object {
-        private const val TAG = "PriceSyncWorker"
     }
 }

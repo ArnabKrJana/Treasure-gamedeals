@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
@@ -34,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
@@ -57,6 +55,14 @@ import com.example.treasure.ui.viewModels.HomeScreenViewModel
 import com.example.treasure.utils.ColorCode
 import kotlinx.coroutines.flow.flowOf
 
+/**
+ * Stateful Composable screen hosting the home feed, displaying categorized paged deal streams,
+ * an anticipated game hero carousel, and reactive favorite indicators.
+ *
+ * @param modifier Layout modifier applied to the home container.
+ * @param viewModel Injected [HomeScreenViewModel] providing deal streams and interaction actions.
+ * @param onCardClick Invoked when an individual game card is tapped, passing the game ID.
+ */
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
@@ -83,6 +89,21 @@ fun HomeScreen(
     )
 }
 
+/**
+ * Stateless content presentation for the Home screen layout.
+ *
+ * Combines the parallax hero carousel at the top with multiple horizontal scrolling deal sections.
+ *
+ * @param modifier Layout modifier applied to the parent container.
+ * @param hotDeals Paged collection of trending hot deals.
+ * @param lowestPriceDeals Paged collection of historic lowest price deals.
+ * @param macDeals Paged collection of macOS-compatible deals.
+ * @param linuxDeals Paged collection of Linux/SteamOS-compatible deals.
+ * @param anticipatedGames List of featured anticipated games for the carousel.
+ * @param favoriteIds Set of game IDs currently saved in the user's wishlist.
+ * @param onToggleFavorite Callback invoked to toggle a game's wishlist status.
+ * @param onCardClick Callback invoked when a game card is selected.
+ */
 @SuppressLint("FrequentlyChangingValue")
 @Composable
 fun HomeScreenContent(
@@ -130,13 +151,11 @@ fun HomeScreenContent(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = bottomPadding)
         ) {
-
-            // --- 1. THE HERO CAROUSEL ---
             item(key = "hero_carousel") {
                 TreasureUpcomingCarousel(
                     games = anticipatedGames,
-                    favoriteIds = favoriteIds, // FIX: Pass down favorite state
-                    onToggleFavorite = onToggleFavorite, // FIX: Pass down toggle action
+                    favoriteIds = favoriteIds,
+                    onToggleFavorite = onToggleFavorite,
                     onGameClick = onCardClick,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -154,7 +173,6 @@ fun HomeScreenContent(
                 )
             }
 
-            // --- 2. HOT DEALS ---
             item(key = "header_hot") {
                 Column(
                     modifier = Modifier
@@ -173,7 +191,6 @@ fun HomeScreenContent(
                 }
             }
 
-            // --- 3. LOWEST PRICE EVER ---
             item(key = "header_lowest") {
                 Column(
                     modifier = Modifier
@@ -194,7 +211,7 @@ fun HomeScreenContent(
                     )
                 }
             }
-            // --- 4. MAC COMPATIBLE EVER ---
+
             item(key = "header_mac") {
                 Column(
                     modifier = Modifier
@@ -202,12 +219,10 @@ fun HomeScreenContent(
                         .background(MaterialTheme.colorScheme.background)
                 ) {
                     Spacer(modifier = Modifier.height(16.dp))
-
                     SectionHeader(
                         title = "Mac Deals",
                         subtitle = "Best games compatible with macOS"
                     )
-
                     GameHorizontalList(
                         deals = macDeals,
                         favoriteIds = favoriteIds,
@@ -217,7 +232,7 @@ fun HomeScreenContent(
                     )
                 }
             }
-            // --- 4. LINUX COMPATIBLE EVER ---
+
             item(key = "header_linux") {
                 Column(
                     modifier = Modifier
@@ -225,12 +240,10 @@ fun HomeScreenContent(
                         .background(MaterialTheme.colorScheme.background)
                 ) {
                     Spacer(modifier = Modifier.height(16.dp))
-
                     SectionHeader(
                         title = "Linux Deals",
                         subtitle = "Native Linux compatible games"
                     )
-
                     GameHorizontalList(
                         deals = linuxDeals,
                         favoriteIds = favoriteIds,
@@ -242,7 +255,6 @@ fun HomeScreenContent(
             }
         }
 
-
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -252,6 +264,12 @@ fun HomeScreenContent(
     }
 }
 
+/**
+ * Section header displaying category title and descriptive subtitle.
+ *
+ * @param title Primary category heading text.
+ * @param subtitle Descriptive subtitle text.
+ */
 @Composable
 fun SectionHeader(title: String, subtitle: String) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -268,6 +286,15 @@ fun SectionHeader(title: String, subtitle: String) {
     }
 }
 
+/**
+ * Horizontal deal list orchestrator that toggles between skeleton shimmer placeholders and populated cards.
+ *
+ * @param deals Paged collection of games to display.
+ * @param favoriteIds Set of game IDs marked as favorite.
+ * @param onToggleFavorite Callback invoked when toggling wishlist status.
+ * @param storageKey Unique key maintaining scroll position across configuration changes.
+ * @param onCardClick Callback invoked when a game card is selected.
+ */
 @Composable
 fun GameHorizontalList(
     deals: LazyPagingItems<GameCardItem>,
@@ -285,6 +312,9 @@ fun GameHorizontalList(
     }
 }
 
+/**
+ * Skeleton placeholder row displaying animated shimmer placeholders during initial network pagination.
+ */
 @Composable
 fun ShimmerRow() {
     LazyRow(
@@ -301,6 +331,15 @@ fun ShimmerRow() {
     }
 }
 
+/**
+ * Populated horizontal deal reel rendering individual [GameCard] composables from paged items.
+ *
+ * @param deals Paged items stream.
+ * @param favoriteIds Active set of favorited game IDs.
+ * @param onToggleFavorite Callback invoked when toggling favorite state.
+ * @param storageKey Key used to retain scroll position in [LazyListState].
+ * @param onCardClick Invoked with the game ID when a card is clicked.
+ */
 @Composable
 fun RealGameRow(
     deals: LazyPagingItems<GameCardItem>,
@@ -348,6 +387,9 @@ fun RealGameRow(
     }
 }
 
+/**
+ * Preview Composable for [HomeScreenContent].
+ */
 @Preview(showBackground = true)
 @Composable
 fun HomeScreenPreview() {

@@ -3,7 +3,17 @@ package com.example.treasure.ui.screens
 import android.content.res.Configuration
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -11,9 +21,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberSwipeToDismissBoxState
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,12 +49,17 @@ import coil3.compose.AsyncImage
 import com.example.treasure.data.local.entity.NotificationEntity
 import com.example.treasure.ui.viewModels.NotificationViewModel
 
+/**
+ * Stateful Composable screen displaying price drop notifications and discount alerts.
+ *
+ * @param viewModel Injected [NotificationViewModel] providing reactive notification records.
+ * @param onBackClick Invoked when the back navigation button is tapped.
+ */
 @Composable
 fun NotificationScreen(
     viewModel: NotificationViewModel = hiltViewModel(),
     onBackClick: () -> Unit
 ) {
-
     val notifications by viewModel.notifications.collectAsStateWithLifecycle()
 
     NotificationScreenContent(
@@ -45,6 +70,14 @@ fun NotificationScreen(
     )
 }
 
+/**
+ * Stateless presentation container for notifications, supporting swipe-to-dismiss and bulk deletion.
+ *
+ * @param notifications List of persisted [NotificationEntity] alert records.
+ * @param onClearAll Callback invoked to clear all notifications from persistence.
+ * @param onDelete Callback invoked to remove an individual notification by ID.
+ * @param onBackClick Callback invoked to navigate back.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotificationScreenContent(
@@ -53,63 +86,48 @@ fun NotificationScreenContent(
     onDelete: (Int) -> Unit,
     onBackClick: () -> Unit
 ) {
-
     Scaffold(
         topBar = {
-
             TopAppBar(
                 title = { Text("Notifications") },
-
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-
                 actions = {
                     if (notifications.isNotEmpty()) {
                         IconButton(onClick = onClearAll) {
-                            Icon(Icons.Default.DeleteSweep, "Clear All")
+                            Icon(Icons.Default.DeleteSweep, contentDescription = "Clear All")
                         }
                     }
                 }
             )
         }
     ) { padding ->
-
         if (notifications.isEmpty()) {
-
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-
                 contentAlignment = Alignment.Center
             ) {
-
                 Text(
                     text = "No notifications",
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-
         } else {
-
             LazyColumn(
-
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-
                 contentPadding = PaddingValues(vertical = 8.dp)
-
             ) {
-
                 items(
                     items = notifications,
                     key = { it.id }
                 ) { item ->
-
                     val dismissState = rememberSwipeToDismissBoxState(
                         confirmValueChange = {
                             if (it == SwipeToDismissBoxValue.EndToStart) {
@@ -122,15 +140,13 @@ fun NotificationScreenContent(
                     SwipeToDismissBox(
                         state = dismissState,
                         enableDismissFromStartToEnd = false,
-
                         backgroundContent = {
-
                             val color by animateColorAsState(
                                 if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart)
                                     Color.Red.copy(alpha = 0.9f)
                                 else
                                     Color.Transparent,
-                                label = ""
+                                label = "dismiss_color"
                             )
 
                             Box(
@@ -138,19 +154,16 @@ fun NotificationScreenContent(
                                     .fillMaxSize()
                                     .background(color)
                                     .padding(horizontal = 20.dp),
-
                                 contentAlignment = Alignment.CenterEnd
                             ) {
-
                                 Icon(
                                     Icons.Default.Delete,
-                                    contentDescription = null,
+                                    contentDescription = "Delete",
                                     tint = Color.White
                                 )
                             }
                         }
                     ) {
-
                         NotificationItem(item)
                     }
                 }
@@ -159,21 +172,22 @@ fun NotificationScreenContent(
     }
 }
 
+/**
+ * Individual row item presenting game title, old price, new discount price, and thumbnail.
+ *
+ * @param item The [NotificationEntity] record to render.
+ */
 @Composable
 fun NotificationItem(item: NotificationEntity) {
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp),
-
         verticalAlignment = Alignment.CenterVertically
     ) {
-
         Column(
             modifier = Modifier.weight(1f)
         ) {
-
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.bodyLarge,
@@ -186,7 +200,6 @@ fun NotificationItem(item: NotificationEntity) {
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-
                 Text(
                     text = "₹${item.oldPrice.toInt()}",
                     style = MaterialTheme.typography.bodySmall,
@@ -210,24 +223,24 @@ fun NotificationItem(item: NotificationEntity) {
         AsyncImage(
             model = item.thumbnail,
             contentDescription = null,
-
             modifier = Modifier
                 .size(width = 120.dp, height = 68.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(Color.Gray),
-
             contentScale = ContentScale.Crop
         )
     }
 }
 
+/**
+ * Preview Composable for [NotificationScreenContent] displaying populated alert records.
+ */
 @Preview(name = "Phone - Light", widthDp = 360, heightDp = 800)
 @Preview(name = "Phone - Dark", widthDp = 360, heightDp = 800, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Preview(name = "Tablet - Light", widthDp = 800, heightDp = 1280)
 @Preview(name = "Tablet - Dark", widthDp = 800, heightDp = 1280, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 fun NotificationPreview() {
-
     val now = System.currentTimeMillis()
 
     val list = listOf(
@@ -272,6 +285,9 @@ fun NotificationPreview() {
     }
 }
 
+/**
+ * Preview Composable for [NotificationScreenContent] in empty state.
+ */
 @Preview(name = "Empty State - Light")
 @Preview(name = "Empty State - Dark", uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable

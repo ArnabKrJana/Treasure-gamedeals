@@ -2,24 +2,40 @@ package com.example.treasure.data.repositoryImpl
 
 import android.content.Context
 import android.util.Log
-import androidx.work.WorkManager
 import androidx.work.impl.WorkManagerImpl
 import com.example.treasure.data.local.TreasureDatabase
 import com.example.treasure.data.local.dao.UserInteractionDao
 import com.example.treasure.data.remote.apiService.TreasureBackendApi
-import com.example.treasure.data.remote.dto.*
+import com.example.treasure.data.remote.dto.AuthResponse
+import com.example.treasure.data.remote.dto.MessageResponse
+import com.example.treasure.data.remote.dto.Role
+import com.example.treasure.data.remote.dto.UserDto
 import com.example.treasure.utils.TokenManager
 import com.google.common.truth.Truth.assertThat
-import io.mockk.*
+import io.mockk.Runs
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.*
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import retrofit2.Response
 
+/**
+ * Unit tests verifying [AuthRepositoryImpl] token management, cloud login, logout, and account deletion.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AuthRepositoryImplTest {
 
@@ -38,30 +54,15 @@ class AuthRepositoryImplTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
 
-        // Mock Android Log
         mockkStatic(Log::class)
         every { Log.d(any(), any()) } returns 0
         every { Log.e(any(), any()) } returns 0
         every { Log.e(any(), any(), any()) } returns 0
 
-        // Mock database DAO
         every { db.userInteractionDao() } returns userInteractionDao
 
-        /*
-         * AuthRepositoryImpl calls:
-         *
-         * WorkManager.getInstance(context).cancelAllWork()
-         *
-         * WorkManager.getInstance() delegates internally to
-         * WorkManagerImpl.getInstance(context).
-         *
-         * Mock the actual implementation method instead of the
-         * Kotlin WorkManager companion wrapper.
-         */
         mockkStatic(WorkManagerImpl::class)
-        every {
-            WorkManagerImpl.getInstance(any())
-        } returns workManager
+        every { WorkManagerImpl.getInstance(any()) } returns workManager
 
         repository = AuthRepositoryImpl(
             api,
@@ -75,257 +76,125 @@ class AuthRepositoryImplTest {
     @After
     fun tearDown() {
         Dispatchers.resetMain()
-
         unmockkStatic(Log::class)
         unmockkStatic(WorkManagerImpl::class)
     }
 
     @Test
-    fun `loginWithGoogle success saves tokens and user and restores wishlist`() =
-        runTest {
+    fun `loginWithGoogle success saves tokens and user and restores wishlist`() = runTest {
+        val idToken = "some_id_token"
+        val userDto = UserDto(
+            1L,
+            "test@test.com",
+            "Test User",
+            null,
+            Role.USER
+        )
+        val authResponse = AuthResponse(
+            "access",
+            "refresh",
+            userDto
+        )
 
-            // Prepare
-            val idToken = "some_id_token"
+        coEvery { api.login("google", any()) } returns Response.success(authResponse)
+        coEvery { api.getDetailedWishlist() } returns Response.success(emptyList())
 
-            val userDto = UserDto(
-                1L,
-                "test@test.com",
-                "Test User",
-                null,
-                Role.USER
-            )
+        val result = repository.loginWithGoogle(idToken)
 
-            val authResponse = AuthResponse(
-                "access",
-                "refresh",
-                userDto
-            )
+        assertThat(result.isSuccess).isTrue()
+        assertThat(result.getOrNull()?.email).isEqualTo("test@test.com")
 
-            coEvery {
-                api.login("google", any())
-            } returns Response.success(authResponse)
-
-            coEvery {
-                api.getDetailedWishlist()
-            } returns Response.success(emptyList())
-
-            // Act
-            val result = repository.loginWithGoogle(idToken)
-
-            // Assert
-            assertThat(result.isSuccess).isTrue()
-            assertThat(result.getOrNull()?.email)
-                .isEqualTo("test@test.com")
-
-            verify {
-                tokenManager.saveTokens(
-                    "access",
-                    "refresh"
-                )
-            }
-
-            verify {
-                tokenManager.saveUser(any())
-            }
-
-            coVerify {
-                api.getDetailedWishlist()
-            }
-        }
+        verify { tokenManager.saveTokens("access", "refresh") }
+        verify { tokenManager.saveUser(any()) }
+        coVerify { api.getDetailedWishlist() }
+    }
 
     @Test
-    fun `loginWithGoogle success but wishlist failure still returns success user`() =
-        runTest {
+    fun `loginWithGoogle success but wishlist failure still returns success user`() = runTest {
+        val idToken = "some_id_token"
+        val userDto = UserDto(
+            1L,
+            "test@test.com",
+            "Test User",
+            null,
+            Role.USER
+        )
+        val authResponse = AuthResponse(
+            "access",
+            "refresh",
+            userDto
+        )
 
-            // Prepare
-            val idToken = "some_id_token"
+        coEvery { api.login("google", any()) } returns Response.success(authResponse)
+        coEvery { api.getDetailedWishlist() } throws Exception("Network Error")
 
-            val userDto = UserDto(
-                1L,
-                "test@test.com",
-                "Test User",
-                null,
-                Role.USER
-            )
+        val result = repository.loginWithGoogle(idToken)
 
-            val authResponse = AuthResponse(
-                "access",
-                "refresh",
-                userDto
-            )
+        assertThat(result.isSuccess).isTrue()
+        assertThat(result.getOrNull()?.email).isEqualTo("test@test.com")
 
-            coEvery {
-                api.login("google", any())
-            } returns Response.success(authResponse)
-
-            coEvery {
-                api.getDetailedWishlist()
-            } throws Exception("Network Error")
-
-            // Act
-            val result = repository.loginWithGoogle(idToken)
-
-            // Assert
-            assertThat(result.isSuccess).isTrue()
-            assertThat(result.getOrNull()?.email)
-                .isEqualTo("test@test.com")
-
-            verify {
-                Log.e(
-                    "AuthRepo",
-                    "Failed to restore wishlist on login",
-                    any()
-                )
-            }
+        verify {
+            Log.e("AuthRepo", "Failed to restore wishlist on login", any())
         }
+    }
 
     @Test
-    fun `loginWithGoogle api failure returns failure`() =
-        runTest {
+    fun `loginWithGoogle api failure returns failure`() = runTest {
+        coEvery { api.login("google", any()) } returns Response.error(401, "".toResponseBody())
 
-            // Prepare
-            coEvery {
-                api.login("google", any())
-            } returns Response.error(
-                401,
-                "".toResponseBody()
-            )
+        val result = repository.loginWithGoogle("invalid")
 
-            // Act
-            val result = repository.loginWithGoogle("invalid")
-
-            // Assert
-            assertThat(result.isFailure).isTrue()
-
-            verify(exactly = 0) {
-                tokenManager.saveTokens(any(), any())
-            }
-        }
+        assertThat(result.isFailure).isTrue()
+        verify(exactly = 0) { tokenManager.saveTokens(any(), any()) }
+    }
 
     @Test
-    fun `logout clears token manager and db and cancels work`() =
-        runTest {
+    fun `logout clears token manager and db and cancels work`() = runTest {
+        every { tokenManager.getRefreshToken() } returns "refresh"
+        coEvery { api.logout(any()) } returns Response.success(MessageResponse("ok"))
+        every { db.clearAllTables() } just Runs
 
-            // Prepare
-            every {
-                tokenManager.getRefreshToken()
-            } returns "refresh"
+        val result = repository.logout()
 
-            coEvery {
-                api.logout(any())
-            } returns Response.success(
-                MessageResponse("ok")
-            )
-
-            every {
-                db.clearAllTables()
-            } just Runs
-
-            // Act
-            val result = repository.logout()
-
-            // Assert
-            assertThat(result.isSuccess).isTrue()
-
-            verify {
-                tokenManager.clearSession()
-            }
-
-            verify {
-                db.clearAllTables()
-            }
-
-            verify {
-                workManager.cancelAllWork()
-            }
-        }
+        assertThat(result.isSuccess).isTrue()
+        verify { tokenManager.clearSession() }
+        verify { db.clearAllTables() }
+        verify { workManager.cancelAllWork() }
+    }
 
     @Test
-    fun `logout proceeds even if api fails`() =
-        runTest {
+    fun `logout proceeds even if api fails`() = runTest {
+        every { tokenManager.getRefreshToken() } returns "refresh"
+        coEvery { api.logout(any()) } throws Exception("Server down")
+        every { db.clearAllTables() } just Runs
 
-            // Prepare
-            every {
-                tokenManager.getRefreshToken()
-            } returns "refresh"
+        val result = repository.logout()
 
-            coEvery {
-                api.logout(any())
-            } throws Exception("Server down")
-
-            every {
-                db.clearAllTables()
-            } just Runs
-
-            // Act
-            val result = repository.logout()
-
-            // Assert
-            assertThat(result.isSuccess).isTrue()
-
-            verify {
-                tokenManager.clearSession()
-            }
-
-            verify {
-                db.clearAllTables()
-            }
-        }
+        assertThat(result.isSuccess).isTrue()
+        verify { tokenManager.clearSession() }
+        verify { db.clearAllTables() }
+    }
 
     @Test
-    fun `deleteAccount success wipes local data`() =
-        runTest {
+    fun `deleteAccount success wipes local data`() = runTest {
+        coEvery { api.deleteMyAccount() } returns Response.success(MessageResponse("deleted"))
+        every { db.clearAllTables() } just Runs
 
-            // Prepare
-            coEvery {
-                api.deleteMyAccount()
-            } returns Response.success(
-                MessageResponse("deleted")
-            )
+        val result = repository.deleteAccount()
 
-            every {
-                db.clearAllTables()
-            } just Runs
-
-            // Act
-            val result = repository.deleteAccount()
-
-            // Assert
-            assertThat(result.isSuccess).isTrue()
-
-            verify {
-                tokenManager.clearSession()
-            }
-
-            verify {
-                db.clearAllTables()
-            }
-
-            verify {
-                workManager.cancelAllWork()
-            }
-        }
+        assertThat(result.isSuccess).isTrue()
+        verify { tokenManager.clearSession() }
+        verify { db.clearAllTables() }
+        verify { workManager.cancelAllWork() }
+    }
 
     @Test
-    fun `deleteAccount failure returns failure`() =
-        runTest {
+    fun `deleteAccount failure returns failure`() = runTest {
+        coEvery { api.deleteMyAccount() } returns Response.error(500, "".toResponseBody())
 
-            // Prepare
-            coEvery {
-                api.deleteMyAccount()
-            } returns Response.error(
-                500,
-                "".toResponseBody()
-            )
+        val result = repository.deleteAccount()
 
-            // Act
-            val result = repository.deleteAccount()
-
-            // Assert
-            assertThat(result.isFailure).isTrue()
-
-            verify(exactly = 0) {
-                tokenManager.clearSession()
-            }
-        }
+        assertThat(result.isFailure).isTrue()
+        verify(exactly = 0) { tokenManager.clearSession() }
+    }
 }

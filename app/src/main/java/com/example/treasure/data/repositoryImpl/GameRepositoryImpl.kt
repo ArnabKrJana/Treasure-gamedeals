@@ -27,6 +27,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+/**
+ * Concrete implementation of [GameRepository] orchestrating offline-first catalog queries,
+ * Paging 3 deal streams, lazy detail enrichment, search, and optimistic user interaction mutations.
+ *
+ * Employs a multi-tiered persistence and caching strategy:
+ * - Room database acts as the single source of truth for deal feeds and user interactions.
+ * - [DealRemoteMediator] coordinates background network pagination from [TreasureBackendApi] into Room.
+ * - In-memory time-to-live (TTL) caching (30 minutes) cushions anticipated game queries to conserve network bandwidth.
+ * - Optimistic local database mutations ensure instant zero-latency UI responses for wishlist and cart actions,
+ *   synchronized asynchronously with backend cloud endpoints.
+ *
+ * @param treasureBackendApi Retrofit client communicating with the backend BFF.
+ * @param db Central Room database managing persistent tables and transactions.
+ */
 class GameRepositoryImpl @Inject constructor(
     private val treasureBackendApi: TreasureBackendApi,
     private val db: TreasureDatabase
@@ -35,21 +49,32 @@ class GameRepositoryImpl @Inject constructor(
     private val dealDao = db.dealDao()
     private val userInteractionDao = db.userInteractionDao()
 
-    // Time constant: 30 minutes in milliseconds
-    private val CACHE_DURATION_MS = 30 * 60 * 1000L
+    companion object {
+        private const val TAG = "GameRepository"
+        private const val CACHE_DURATION_MS = 30 * 60 * 1000L
+        private const val PAGING_PAGE_SIZE = 20
+        private const val PAGING_PREFETCH_DISTANCE = 5
+    }
 
     private var cachedAnticipatedGames: List<GameCardItem>? = null
     private var cacheTimestamp: Long = 0L
 
+    /**
+     * Produces a continuous stream of paginated [DealEntity] records for the specified [DealCategory].
+     *
+     * Integrates [DealRemoteMediator] with Room's [androidx.paging.PagingSource] via [Pager].
+     *
+     * @param category The catalog category partition to stream.
+     * @return Cold [Flow] emitting reactive [PagingData] batches.
+     */
     @OptIn(ExperimentalPagingApi::class)
     override fun getDealsPaged(category: DealCategory): Flow<PagingData<DealEntity>> {
         return Pager(
             config = PagingConfig(
-                pageSize = 20,
+                pageSize = PAGING_PAGE_SIZE,
                 enablePlaceholders = true,
-                prefetchDistance = 5
+                prefetchDistance = PAGING_PREFETCH_DISTANCE
             ),
-            // Updated to pass the new API instead of ItadApi
             remoteMediator = DealRemoteMediator(db, treasureBackendApi, category),
             pagingSourceFactory = {
                 dealDao.getDealsByCategory(category)
@@ -57,60 +82,24 @@ class GameRepositoryImpl @Inject constructor(
         ).flow
     }
 
-//    override suspend fun getAnticipatedGames(): List<GameCardItem> = withContext(Dispatchers.IO) {
-//        val currentTime = System.currentTimeMillis()
-//
-//        if (cachedAnticipatedGames != null && (currentTime - cacheTimestamp) < 30 * 60 * 1000) {
-//            return@withContext cachedAnticipatedGames!!
-//        }
-//        try {
-//
-//            val response = treasureBackendApi.getAnticipatedGames()
-//
-//            if (response.isSuccessful && response.body() != null) {
-//                // THE FIX: We MUST access .content here to get the actual List<GameDto> out of the SpringPageResponse wrapper
-//                return@withContext response.body()!!.content.map { gameDto ->
-//                    GameCardItem(
-//                        id = gameDto.id,
-//                        listingIndex = 0, // Unused for carousel
-//                        title = gameDto.title,
-//                        thumbnail = gameDto.thumbnail ?: gameDto.screenshots?.firstOrNull() ?: "",
-//                        store = gameDto.primaryStore ?: "Multiple",
-//                        upVotes = if (gameDto.upVotes != null) UpVotes(
-//                            gameDto.upVotes,
-//                            safeColorCode(gameDto.upVoteColor)
-//                        ) else null,
-//                        price = if (gameDto.originalPrice != null && gameDto.currentPrice != null) {
-//                            Price(
-//                                originalPrice = gameDto.originalPrice,
-//                                currentPrice = gameDto.currentPrice
-//                            )
-//                        } else null,
-//                        genres = gameDto.genres ?: emptyList(),
-//                        releaseDate = gameDto.expectedReleaseDate
-//
-//                    )
-//                }
-//            }
-//            return@withContext emptyList()
-//        } catch (e: Exception) {
-//            Log.e("GameRepository", "Failed to fetch anticipated games", e)
-//            return@withContext emptyList()
-//        }
-//    }
-
+    /**
+     * Retrieves the curated list of highly anticipated upcoming game titles.
+     *
+     * Evaluates the in-memory cache against the 30-minute expiration window before querying
+     * the backend server. Falls back to stale cached data if network connectivity fails.
+     *
+     * @return List of [GameCardItem] representations.
+     */
     override suspend fun getAnticipatedGames(): List<GameCardItem> = withContext(Dispatchers.IO) {
         val currentTime = System.currentTimeMillis()
 
-        // 1. Check if cache exists and is still fresh
         if (cachedAnticipatedGames != null && (currentTime - cacheTimestamp) < CACHE_DURATION_MS) {
-            Log.d("GameRepository", "Returning cached anticipated games")
+            Log.d(TAG, "Returning cached anticipated games")
             return@withContext cachedAnticipatedGames!!
         }
 
-        // 2. Cache is stale or empty, fetch from server
         try {
-            Log.d("GameRepository", "Fetching fresh anticipated games from server")
+            Log.d(TAG, "Fetching fresh anticipated games from server")
             val response = treasureBackendApi.getAnticipatedGames()
 
             if (response.isSuccessful && response.body() != null) {
@@ -136,7 +125,6 @@ class GameRepositoryImpl @Inject constructor(
                     )
                 }
 
-                // 3. Update cache and timestamp
                 cachedAnticipatedGames = freshGames
                 cacheTimestamp = currentTime
 
@@ -144,28 +132,38 @@ class GameRepositoryImpl @Inject constructor(
             }
             return@withContext emptyList()
         } catch (e: Exception) {
-            Log.e("GameRepository", "Failed to fetch anticipated games", e)
-            // Fallback: If network fails, return cached data even if stale, if available
+            Log.e(TAG, "Failed to fetch anticipated games", e)
             return@withContext cachedAnticipatedGames ?: emptyList()
         }
     }
 
+    /**
+     * Observes real-time changes to a cached deal entity from the local Room database.
+     *
+     * @param dealId Unique identifier of the deal.
+     * @return Cold [Flow] emitting the cached [DealEntity], or `null` if not in local storage.
+     */
     override fun observeGameDetails(dealId: String): Flow<DealEntity?> {
         return dealDao.observeDealById(dealId)
     }
 
-    // --- THE MASTER CLEANUP ---
+    /**
+     * Lazily fetches comprehensive game details from the backend and enriches the local Room record.
+     *
+     * Executes a single request to the backend BFF, maps the received [GameDto] to [DealEntity],
+     * and updates existing database rows via [dealDao.updateDealDetails]. If the deal does not
+     * yet exist locally (e.g., opened from Search), inserts the complete entity.
+     *
+     * @param dealId Unique identifier of the game deal to enrich.
+     */
     override suspend fun fetchAndEnrichGameDetails(dealId: String): Unit =
         withContext(Dispatchers.IO) {
             try {
-                // 1. Single call to your Spring Boot BFF
                 val response = treasureBackendApi.getGameDetails(dealId)
 
                 if (response.isSuccessful && response.body() != null) {
-                    // 2. Map the clean DTO to your Room Entity using our Mappers.kt
                     val mappedEntity = response.body()!!.toEntity(DealCategory.SEARCH, 0)
 
-                    // 3. Attempt to update the existing record
                     val rowsUpdated = dealDao.updateDealDetails(
                         dealId = dealId,
                         description = mappedEntity.description,
@@ -180,46 +178,69 @@ class GameRepositoryImpl @Inject constructor(
                         trailerUrl = mappedEntity.trailerUrl
                     )
 
-                    // 4. If update returns 0, it means it's a Search Result not in DB. Insert it.
                     if (rowsUpdated == 0) {
                         dealDao.insertDeals(listOf(mappedEntity))
                     }
                 }
             } catch (e: Exception) {
-                Log.e("GameRepository", "Error fetching game details for ID: $dealId", e)
+                Log.e(TAG, "Error fetching game details for ID: $dealId", e)
             }
         }
 
+    /**
+     * Searches catalog deals matching query text keywords.
+     *
+     * @param query Search query text submitted by the user.
+     * @return List of matching [GameCardItem] representations.
+     */
     override suspend fun searchGames(query: String): List<GameCardItem> =
         withContext(Dispatchers.IO) {
             try {
                 val response = treasureBackendApi.searchGames(query)
 
                 if (response.isSuccessful && response.body() != null) {
-                    // Map the backend DTO list directly to UI GameCardItems
                     return@withContext response.body()!!.map { it.toGameCardItem() }
                 } else {
                     return@withContext emptyList()
                 }
             } catch (e: Exception) {
-                Log.e("GameRepository", "Error searching games: $query", e)
+                Log.e(TAG, "Error searching games: $query", e)
                 return@withContext emptyList()
             }
         }
 
-    // --- USER INTERACTIONS (CART & WISHLIST) ---
-
+    /**
+     * Observes all items currently placed in the user's shopping cart.
+     *
+     * @return Cold [Flow] emitting the list of cart [UserInteractionEntity] records.
+     */
     override fun getCartItems(): Flow<List<UserInteractionEntity>> =
         userInteractionDao.getCartItems()
 
+    /**
+     * Observes all titles marked as favorites or wishlisted.
+     *
+     * @return Cold [Flow] emitting the list of wishlisted [UserInteractionEntity] records.
+     */
     override fun getWishlistItems(): Flow<List<UserInteractionEntity>> =
         userInteractionDao.getFavorites()
 
+    /**
+     * Observes all favorited game IDs for fast O(1) membership checks in feed composables.
+     *
+     * @return Cold [Flow] emitting the list of active favorite game ID strings.
+     */
     override fun observeInteractionIds(): Flow<List<String>> =
         userInteractionDao.getAllInteractedIds()
 
+    /**
+     * Optimistically toggles the favorited state of a game locally, followed by background cloud synchronization.
+     *
+     * Mutates the local Room record inside an atomic transaction, then dispatches a network sync call to the backend.
+     *
+     * @param game The target [GameCardItem] being toggled.
+     */
     override suspend fun toggleFavorite(game: GameCardItem) {
-        // 1. Optimistic Local Update (Instant UI feedback)
         db.withTransaction {
             val currentInteraction = userInteractionDao.getInteractionForGame(game.id)
             val isCurrentlyFav = currentInteraction?.isFavorite ?: false
@@ -227,7 +248,7 @@ class GameRepositoryImpl @Inject constructor(
 
             val newInteraction = UserInteractionEntity(
                 gameId = game.id,
-                isFavorite = !isCurrentlyFav, // Toggle
+                isFavorite = !isCurrentlyFav,
                 isAddedToCart = isInCart,
                 timestamp = System.currentTimeMillis(),
                 title = game.title,
@@ -241,20 +262,23 @@ class GameRepositoryImpl @Inject constructor(
             userInteractionDao.insertInteraction(newInteraction)
         }
 
-        // 2. Sync with Spring Boot BFF
         try {
             val response = treasureBackendApi.toggleWishlist(game.id)
             if (!response.isSuccessful) {
-                Log.e("GameRepository", "Failed to sync wishlist to cloud: ${response.code()}")
+                Log.e(TAG, "Failed to sync wishlist to cloud: ${response.code()}")
             }
         } catch (e: Exception) {
-            Log.e("GameRepository", "Network exception syncing wishlist to cloud", e)
+            Log.e(TAG, "Network exception syncing wishlist to cloud", e)
         }
     }
 
+    /**
+     * Asynchronously synchronizes the authenticated user's cloud wishlist into local Room persistence.
+     *
+     * Executes in an independent scope to ensure in-flight sync survives calling ViewModel teardowns.
+     */
     @OptIn(DelicateCoroutinesApi::class)
     override suspend fun syncWishlistFromCloud() {
-        // FIX 3: Fire-and-forget in GlobalScope so ViewModel destruction doesn't kill the sync
         GlobalScope.launch(Dispatchers.IO) {
             try {
                 val response = treasureBackendApi.getDetailedWishlist()
@@ -286,11 +310,18 @@ class GameRepositoryImpl @Inject constructor(
                     }
                 }
             } catch (e: Exception) {
-                Log.e("GameRepository", "Failed to sync detailed wishlist from cloud", e)
+                Log.e(TAG, "Failed to sync detailed wishlist from cloud", e)
             }
         }
     }
 
+    /**
+     * Toggles the presence of a game within the user's shopping cart.
+     *
+     * Executes an atomic database transaction updating the cart flag on [UserInteractionEntity].
+     *
+     * @param game The target [GameCardItem] being added or removed from the cart.
+     */
     override suspend fun toggleCart(game: GameCardItem) {
         db.withTransaction {
             val currentInteraction = userInteractionDao.getInteractionForGame(game.id)
@@ -300,7 +331,7 @@ class GameRepositoryImpl @Inject constructor(
             val newInteraction = UserInteractionEntity(
                 gameId = game.id,
                 isFavorite = isCurrentlyFav,
-                isAddedToCart = !isInCart, // Toggle
+                isAddedToCart = !isInCart,
                 timestamp = System.currentTimeMillis(),
                 title = game.title,
                 thumbnail = game.thumbnail,
@@ -314,8 +345,11 @@ class GameRepositoryImpl @Inject constructor(
         }
     }
 
-    // --- HELPER MAPPERS ---
-
+    /**
+     * Maps a remote [GameDto] directly into a UI [GameCardItem] model.
+     *
+     * @return Initialized [GameCardItem] representation.
+     */
     private fun GameDto.toGameCardItem(): GameCardItem {
         return GameCardItem(
             id = this.id,
@@ -335,6 +369,12 @@ class GameRepositoryImpl @Inject constructor(
         )
     }
 
+    /**
+     * Safely parses review score color strings into strongly-typed [ColorCode] enums with a fallback to YELLOW.
+     *
+     * @param colorString Color name received from remote API.
+     * @return Corresponding [ColorCode] constant.
+     */
     private fun safeColorCode(colorString: String?): ColorCode {
         return try {
             if (colorString != null) ColorCode.valueOf(colorString.uppercase()) else ColorCode.YELLOW

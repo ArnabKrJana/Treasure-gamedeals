@@ -9,7 +9,13 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -17,7 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDone
-import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.PlayCircle
@@ -26,7 +31,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,13 +53,40 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
-import com.example.treasure.ui.theme.TreasureTheme
 import com.example.treasure.R
-// --- NEW: Status Enum ---
+import com.example.treasure.ui.theme.TreasureTheme
+
+/**
+ * Execution status state driving animated icon transitions for overlay media actions.
+ */
 enum class ActionStatus {
-    IDLE, LOADING, SUCCESS
+    /**
+     * Resting default state ready for interaction.
+     */
+    IDLE,
+
+    /**
+     * Active asynchronous operation executing (renders circular progress indicator).
+     */
+    LOADING,
+
+    /**
+     * Successful completion state (renders checked icon with success tint).
+     */
+    SUCCESS
 }
 
+/**
+ * Full-screen modal video player dialog composable powered by AndroidX Media3 ExoPlayer.
+ *
+ * Implements immersive video playback features:
+ * - Temporarily locks device orientation to [ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE].
+ * - Hides platform status and navigation system bars using [WindowInsetsControllerCompat].
+ * - Releases the [ExoPlayer] instance cleanly via [DisposableEffect] when the overlay is dismissed.
+ *
+ * @param trailerUrl Remote streaming URL of the video trailer.
+ * @param onDismiss Callback invoked when the user dismisses the dialog or taps the close button.
+ */
 @OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayerOverlay(
@@ -154,13 +188,23 @@ fun VideoPlayerOverlay(
     }
 }
 
-// 1. The Dialog Wrapper
+/**
+ * Full-screen dialog wrapper presenting high-resolution game screenshots in an interactive viewer.
+ *
+ * @param screenshots List of remote screenshot image URLs.
+ * @param initialIndex Starting page index displayed upon dialog presentation.
+ * @param downloadStatuses Map tracking local download [ActionStatus] states per image URL.
+ * @param uploadStatuses Map tracking Google Drive cloud sync [ActionStatus] states per image URL.
+ * @param onDismiss Callback invoked when the user dismisses the dialog.
+ * @param onDownloadLocalClick Callback invoked when requesting local storage download of the active screenshot.
+ * @param onDriveSyncClick Callback invoked when requesting Google Drive cloud backup of the active screenshot.
+ */
 @Composable
 fun FullScreenImageOverlay(
     screenshots: List<String>,
     initialIndex: Int,
-    downloadStatuses: Map<String, ActionStatus>, // NEW
-    uploadStatuses: Map<String, ActionStatus>,   // NEW
+    downloadStatuses: Map<String, ActionStatus>,
+    uploadStatuses: Map<String, ActionStatus>,
     onDismiss: () -> Unit,
     onDownloadLocalClick: (String) -> Unit,
     onDriveSyncClick: (String) -> Unit
@@ -184,7 +228,22 @@ fun FullScreenImageOverlay(
     }
 }
 
-// 2. The Pure UI Content
+/**
+ * Content composable for the full-screen screenshot viewer dialog.
+ *
+ * Implements:
+ * - [HorizontalPager] for swiping between high-resolution screenshots.
+ * - Current page indicator chip (`"${currentPage + 1} / ${total}"`).
+ * - Floating action pill with animated local download and Google Drive cloud sync buttons.
+ *
+ * @param screenshots List of screenshot URLs.
+ * @param initialIndex Starting page index.
+ * @param downloadStatuses Map of local download action states.
+ * @param uploadStatuses Map of cloud sync action states.
+ * @param onDismiss Dismiss callback.
+ * @param onDownloadLocalClick Local download callback.
+ * @param onDriveSyncClick Drive sync callback.
+ */
 @Composable
 fun FullScreenImageOverlayContent(
     screenshots: List<String>,
@@ -196,8 +255,6 @@ fun FullScreenImageOverlayContent(
     onDriveSyncClick: (String) -> Unit
 ) {
     val pagerState = rememberPagerState(initialPage = initialIndex) { screenshots.size }
-
-    // A premium success color (Google Green)
     val successColor = Color(0xFF4CAF50)
 
     Box(
@@ -209,7 +266,6 @@ fun FullScreenImageOverlayContent(
             modifier = Modifier.fillMaxSize(),
             key = { it }
         ) { pageIndex ->
-
             val interactionSource = remember { MutableInteractionSource() }
 
             AsyncImage(
@@ -225,7 +281,6 @@ fun FullScreenImageOverlayContent(
             )
         }
 
-        // Close Button (Top Right)
         IconButton(
             onClick = onDismiss,
             modifier = Modifier
@@ -236,7 +291,6 @@ fun FullScreenImageOverlayContent(
             Icon(imageVector = Icons.Default.Close, contentDescription = "Close", tint = Color.White)
         }
 
-        // Page Indicator (Bottom Center)
         if (screenshots.size > 1) {
             Text(
                 text = "${pagerState.currentPage + 1} / ${screenshots.size}",
@@ -250,7 +304,6 @@ fun FullScreenImageOverlayContent(
             )
         }
 
-        // Action Buttons (Bottom Right)
         val currentUrl = screenshots.getOrNull(pagerState.currentPage) ?: ""
         val currentDownloadStatus = downloadStatuses[currentUrl] ?: ActionStatus.IDLE
         val currentUploadStatus = uploadStatuses[currentUrl] ?: ActionStatus.IDLE
@@ -263,10 +316,9 @@ fun FullScreenImageOverlayContent(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // --- Local Download Button ---
             IconButton(
                 onClick = { onDownloadLocalClick(currentUrl) },
-                enabled = currentDownloadStatus == ActionStatus.IDLE, // Disable if loading or done
+                enabled = currentDownloadStatus == ActionStatus.IDLE,
                 modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)
             ) {
                 Crossfade(targetState = currentDownloadStatus, label = "download_anim") { status ->
@@ -278,10 +330,9 @@ fun FullScreenImageOverlayContent(
                 }
             }
 
-            // --- Google Drive Sync Button ---
             IconButton(
                 onClick = { onDriveSyncClick(currentUrl) },
-                enabled = currentUploadStatus == ActionStatus.IDLE, // Disable if loading or done
+                enabled = currentUploadStatus == ActionStatus.IDLE,
                 modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)
             ) {
                 Crossfade(targetState = currentUploadStatus, label = "upload_anim") { status ->
@@ -296,7 +347,11 @@ fun FullScreenImageOverlayContent(
     }
 }
 
-// Helper Extension
+/**
+ * Traverses the [Context] hierarchy through [ContextWrapper] links to resolve the hosting [Activity].
+ *
+ * @return The hosting [Activity], or `null` if not found.
+ */
 fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
@@ -308,10 +363,10 @@ fun Context.findActivity(): Activity? = when (this) {
 fun FullScreenImageOverlayPreview() {
     TreasureTheme {
         FullScreenImageOverlayContent(
-            screenshots =imageList ,
+            screenshots = imageList,
             initialIndex = 0,
-            downloadStatuses = mapOf(imageList.first() to ActionStatus.SUCCESS), // Previewing Success State!
-            uploadStatuses = mapOf(imageList.last() to ActionStatus.LOADING),   // Previewing Loading State!
+            downloadStatuses = mapOf(imageList.first() to ActionStatus.SUCCESS),
+            uploadStatuses = mapOf(imageList.last() to ActionStatus.LOADING),
             onDismiss = {},
             onDriveSyncClick = {},
             onDownloadLocalClick = {}
@@ -319,7 +374,8 @@ fun FullScreenImageOverlayPreview() {
     }
 }
 
-val imageList=listOf("https://images.unsplash.com/photo-1542806109-e88b46573e79",
+val imageList = listOf(
+    "https://images.unsplash.com/photo-1542806109-e88b46573e79",
     "https://images.unsplash.com/photo-1474511320723-9a56873867b5",
     "https://images.unsplash.com/photo-1544946632-b73cacef16ad"
 )

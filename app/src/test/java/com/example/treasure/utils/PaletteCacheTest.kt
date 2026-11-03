@@ -7,8 +7,7 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Tests for PaletteCache singleton.
- * Verifies that the LRU cache correctly stores and retrieves Palette objects.
+ * Unit tests verifying [PaletteCache] LRU caching, storage, and retrieval mechanics.
  */
 class PaletteCacheTest {
 
@@ -21,10 +20,10 @@ class PaletteCacheTest {
     fun `put and get returns the same palette object`() {
         val key = "https://example.com/image.jpg"
         val mockPalette = mockk<Palette>()
-        
+
         PaletteCache.put(key, mockPalette)
         val retrieved = PaletteCache.get(key)
-        
+
         assertThat(retrieved).isSameInstanceAs(mockPalette)
     }
 
@@ -32,7 +31,7 @@ class PaletteCacheTest {
     fun `get returns null for non-existent key`() {
         val key = "non_existent_key"
         val retrieved = PaletteCache.get(key)
-        
+
         assertThat(retrieved).isNull()
     }
 
@@ -41,10 +40,10 @@ class PaletteCacheTest {
         val key = "shared_key"
         val firstPalette = mockk<Palette>()
         val secondPalette = mockk<Palette>()
-        
+
         PaletteCache.put(key, firstPalette)
         PaletteCache.put(key, secondPalette)
-        
+
         val retrieved = PaletteCache.get(key)
         assertThat(retrieved).isSameInstanceAs(secondPalette)
         assertThat(retrieved).isNotSameInstanceAs(firstPalette)

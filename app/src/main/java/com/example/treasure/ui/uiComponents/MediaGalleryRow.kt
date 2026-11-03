@@ -2,7 +2,13 @@ package com.example.treasure.ui.uiComponents
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,11 +23,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.example.treasure.ui.theme.TreasureTheme
 
+/**
+ * Horizontally scrolling media gallery row composable displaying video trailer thumbnails and screenshot cards.
+ *
+ * Implements a 16:9 aspect ratio standard with rounded corners (12dp), rendering a dedicated video trailer card
+ * with play button overlay when [trailerUrl] is available, followed by interactive screenshot tiles.
+ *
+ * @param trailerUrl Optional video stream URL. If non-null, renders the trailer launch card.
+ * @param thumbnailUrl Remote URL for the trailer's thumbnail poster image.
+ * @param screenshots Optional list of high-definition in-game screenshot URLs.
+ * @param onTrailerClick Callback invoked when tapping the trailer launch card.
+ * @param onScreenshotClick Callback invoked when tapping a screenshot, receiving the item's index.
+ * @param modifier Composable modifier for gallery container styling.
+ */
 @Composable
 fun MediaGalleryRow(
     trailerUrl: String?,
@@ -38,7 +57,6 @@ fun MediaGalleryRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier
     ) {
-        // Trailer Thumbnail Item
         if (trailerUrl != null) {
             item {
                 Box(
@@ -72,7 +90,6 @@ fun MediaGalleryRow(
             }
         }
 
-        // Screenshots
         itemsIndexed(screenshots ?: emptyList()) { index, screenshotUrl ->
             AsyncImage(
                 model = screenshotUrl,

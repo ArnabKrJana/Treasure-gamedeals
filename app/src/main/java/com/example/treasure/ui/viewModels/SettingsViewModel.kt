@@ -18,11 +18,25 @@ import com.example.treasure.workers.PriceSyncWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
+/**
+ * State representation for the user preferences and settings interface.
+ *
+ * @property theme Currently selected application theme mode (LIGHT, DARK, or SYSTEM).
+ * @property dynamicColors Whether dynamic Material You color generation is enabled.
+ * @property notificationsEnabled Whether local price drop alerts are active.
+ * @property syncFrequency Interval in hours between background price synchronization checks.
+ * @property notifyThreshold Price drop percentage threshold required to trigger an alert.
+ * @property version Current semantic version of the installed application build.
+ * @property isDriveLinked Whether a Google Drive account is actively linked for cloud backups.
+ */
 data class SettingsUiState(
     val theme: AppTheme = AppTheme.SYSTEM,
     val dynamicColors: Boolean = true,
@@ -33,14 +47,27 @@ data class SettingsUiState(
     val isDriveLinked: Boolean = false
 )
 
+/**
+ * ViewModel managing user preferences, WorkManager background schedule reconfiguration,
+ * image cache eviction, and Google Drive account linking.
+ *
+ * Combines multiple DataStore preference flows into a consolidated [SettingsUiState].
+ *
+ * @property repository Settings repository managing DataStore preferences.
+ * @property api Backend API service executing Google Drive authorization requests.
+ * @param context Application context used for WorkManager and Coil ImageLoader access.
+ */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val repository: SettingsRepository,
     private val api: TreasureBackendApi,
-    @param:ApplicationContext private val context: Context // Fixes the Kotlin 2.0 annotation warning
+    @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    val uiState: StateFlow<SettingsUiState> = combine(
+    /**
+     * Combined observable state representing all active user settings.
+     */
+    val uiState: StateFlow<SettingsUiState> = combine<Any, SettingsUiState>(
         repository.appTheme,
         repository.isDynamicColorEnabled,
         repository.areNotificationsEnabled,
@@ -70,18 +97,36 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // --- ACTIONS ---
-
+    /**
+     * Updates the persistent application theme preference.
+     *
+     * @param theme The target [AppTheme] mode.
+     */
     fun updateTheme(theme: AppTheme) = viewModelScope.launch { repository.setAppTheme(theme) }
 
+    /**
+     * Toggles whether Material You dynamic colors are extracted from device wallpaper.
+     *
+     * @param enabled True to enable dynamic wallpaper palettes.
+     */
     fun toggleDynamicColors(enabled: Boolean) = viewModelScope.launch {
         repository.setDynamicColor(enabled)
     }
 
+    /**
+     * Toggles whether background price drop notifications are delivered.
+     *
+     * @param enabled True to allow notifications.
+     */
     fun toggleNotifications(enabled: Boolean) = viewModelScope.launch {
         repository.setNotificationsEnabled(enabled)
     }
 
+    /**
+     * Updates the background price sync cadence and reschedules the periodic [PriceSyncWorker].
+     *
+     * @param hours Interval in hours between consecutive background sync executions.
+     */
     fun updateSyncFrequency(hours: Int) = viewModelScope.launch {
         repository.setSyncFrequency(hours)
 
@@ -104,22 +149,36 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
+    /**
+     * Updates the minimum price drop percentage required to trigger a user notification.
+     *
+     * @param percent Percentage drop threshold (e.g., 3%).
+     */
     fun updateNotifyThreshold(percent: Int) = viewModelScope.launch {
         repository.setNotifyThreshold(percent)
     }
 
+    /**
+     * Evicts all cached images from both memory and disk caches maintained by Coil.
+     */
     fun clearImageCache() {
         val imageLoader = ImageLoader(context)
         imageLoader.memoryCache?.clear()
         imageLoader.diskCache?.clear()
     }
 
-    // --- GOOGLE DRIVE ACTIONS ---
-
+    /**
+     * Clears the Google Drive linked status in local preferences.
+     */
     fun unlinkDrive() = viewModelScope.launch {
         repository.setDriveLinked(false)
     }
 
+    /**
+     * Exchanges an OAuth server authorization code for backend Google Drive access and updates local status.
+     *
+     * @param serverAuthCode Google OAuth authorization code.
+     */
     fun linkDriveAccount(serverAuthCode: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -133,6 +192,9 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Resets the Google Drive linked flag when backend tokens expire or are revoked.
+     */
     fun setDriveNeedsAuth() = viewModelScope.launch {
         repository.setDriveLinked(false)
     }

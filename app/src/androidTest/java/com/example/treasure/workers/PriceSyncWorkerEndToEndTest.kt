@@ -3,8 +3,11 @@ package com.example.treasure.workers
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
-import androidx.compose.ui.test.*
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.room.Room
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -40,7 +43,9 @@ import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import dagger.hilt.android.testing.UninstallModules
 import dagger.hilt.components.SingletonComponent
-import io.mockk.*
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -53,6 +58,10 @@ import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * End-to-end integration tests verifying background price drop detection, notification dispatching,
+ * and subsequent UI rendering on [MainActivity].
+ */
 @HiltAndroidTest
 @UninstallModules(DatabaseModule::class, NetworkModule::class)
 @RunWith(AndroidJUnit4::class)
@@ -128,7 +137,6 @@ class PriceSyncWorkerEndToEndTest {
         context = InstrumentationRegistry.getInstrumentation().targetContext
         uiDevice = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
 
-        // Stub background API calls triggered by MainActivity startup
         val emptyPage = Response.success(
             SpringPageResponse<GameDto>(
                 content = emptyList(),
@@ -149,17 +157,14 @@ class PriceSyncWorkerEndToEndTest {
         coEvery { api.getAnticipatedGames(any(), any()) } returns Response.success(emptyPage.body())
         coEvery { api.getMyWishlistIds() } returns Response.success(emptyList())
 
-        // Grant POST_NOTIFICATIONS permission on Android 13+ (API 33+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val pkg = context.packageName
             uiDevice.executeShellCommand("pm grant $pkg android.permission.POST_NOTIFICATIONS")
         }
 
-        // Clear existing Android notifications to ensure clean test state
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancelAll()
 
-        // Seed TokenManager with a test token and user profile
         tokenManager.saveTokens("test_access_token_123", "test_refresh_token_123")
         tokenManager.saveUser(
             User(
@@ -171,7 +176,6 @@ class PriceSyncWorkerEndToEndTest {
             )
         )
 
-        // Initialize real settings DataStore values
         runBlocking {
             settingsRepository.setNotificationsEnabled(true)
             settingsRepository.setNotifyThreshold(3)
@@ -189,198 +193,165 @@ class PriceSyncWorkerEndToEndTest {
         }
     }
 
-    // =====================================================================
-    // END-TO-END NOTIFICATION TEST (REAL WORKER -> REAL NOTIFICATION -> REAL UI)
-    // =====================================================================
-
     @Test
-    fun completeEndToEndWishlistPriceDropNotificationFlow() {
-        runBlocking {
-            // 1. Configure notification settings via real SettingsRepository
-            settingsRepository.setNotificationsEnabled(true)
-            settingsRepository.setNotifyThreshold(3) // 3% threshold
+    fun completeEndToEndWishlistPriceDropNotificationFlow() = runBlocking {
+        settingsRepository.setNotificationsEnabled(true)
+        settingsRepository.setNotifyThreshold(3)
 
-            // 2. Seed fake wishlist item in Room DB
-            val wishlistItem = UserInteractionEntity(
-                gameId = "integration_test_hades",
-                title = "Hades II",
-                thumbnail = null,
-                currentPrice = 1000.0,
-                originalPrice = 1200.0,
-                storeId = "steam",
-                isFavorite = true,
-                latestSyncedPrice = 1000.0
-            )
-            database.userInteractionDao().insertInteraction(wishlistItem)
+        val wishlistItem = UserInteractionEntity(
+            gameId = "integration_test_hades",
+            title = "Hades II",
+            thumbnail = null,
+            currentPrice = 1000.0,
+            originalPrice = 1200.0,
+            storeId = "steam",
+            isFavorite = true,
+            latestSyncedPrice = 1000.0
+        )
+        database.userInteractionDao().insertInteraction(wishlistItem)
 
-            // 3. Fake backend response (₹1000 -> ₹700, 30% drop)
-            coEvery { api.getWishlistPrices() } returns Response.success(
-                mapOf("integration_test_hades" to """{"current":700.0,"original":1200.0}""")
-            )
+        coEvery { api.getWishlistPrices() } returns Response.success(
+            mapOf("integration_test_hades" to """{"current":700.0,"original":1200.0}""")
+        )
 
-            // 4. Instantiate and execute the REAL PriceSyncWorker using REAL PriceNotificationManagerImpl
-            val worker = PriceSyncWorker(
-                context,
-                workerParams,
-                database,
-                api,
-                settingsRepository,
-                realPriceNotificationManager,
-                Dispatchers.IO
-            )
+        val worker = PriceSyncWorker(
+            context,
+            workerParams,
+            database,
+            api,
+            settingsRepository,
+            realPriceNotificationManager,
+            Dispatchers.IO
+        )
 
-            val result = worker.doWork()
+        val result = worker.doWork()
 
-            // 5. Verify worker succeeded
-            assertThat(result).isEqualTo(ListenableWorker.Result.success())
+        assertThat(result).isEqualTo(ListenableWorker.Result.success())
 
-            // 6. Verify Room database contains updated notification record and synced price
-            val updatedInteraction = database.userInteractionDao().getInteractionForGame("integration_test_hades")
-            assertThat(updatedInteraction?.latestSyncedPrice).isEqualTo(700.0)
+        val updatedInteraction = database.userInteractionDao().getInteractionForGame("integration_test_hades")
+        assertThat(updatedInteraction?.latestSyncedPrice).isEqualTo(700.0)
 
-            val notificationsInDb = database.notificationDao().getAllNotifications().first()
-            assertThat(notificationsInDb).hasSize(1)
-            val dbNotification = notificationsInDb[0]
-            assertThat(dbNotification.gameId).isEqualTo("integration_test_hades")
-            assertThat(dbNotification.title).isEqualTo("Hades II")
-            assertThat(dbNotification.oldPrice).isEqualTo(1000.0)
-            assertThat(dbNotification.newPrice).isEqualTo(700.0)
+        val notificationsInDb = database.notificationDao().getAllNotifications().first()
+        assertThat(notificationsInDb).hasSize(1)
+        val dbNotification = notificationsInDb[0]
+        assertThat(dbNotification.gameId).isEqualTo("integration_test_hades")
+        assertThat(dbNotification.title).isEqualTo("Hades II")
+        assertThat(dbNotification.oldPrice).isEqualTo(1000.0)
+        assertThat(dbNotification.newPrice).isEqualTo(700.0)
 
-            // 7. Verify real Android system notification in notification shade via UiAutomator
-            uiDevice.openNotification()
+        uiDevice.openNotification()
 
-            val notificationTitleFound = uiDevice.wait(
-                Until.hasObject(By.textContains("Price Drop: Hades II")),
-                3000
-            )
-            val notificationTextFound = uiDevice.wait(
-                Until.hasObject(By.textContains("Price updated to ₹700")),
-                3000
-            )
+        val notificationTitleFound = uiDevice.wait(
+            Until.hasObject(By.textContains("Price Drop: Hades II")),
+            3000
+        )
+        val notificationTextFound = uiDevice.wait(
+            Until.hasObject(By.textContains("Price updated to ₹700")),
+            3000
+        )
 
-            assertThat(notificationTitleFound).isTrue()
-            assertThat(notificationTextFound).isTrue()
+        assertThat(notificationTitleFound).isTrue()
+        assertThat(notificationTextFound).isTrue()
 
-            // Close notification shade without backgrounding app
-            uiDevice.pressBack()
+        uiDevice.pressBack()
 
-            // 8. Navigate through the real app UI to the Notifications screen
-            composeTestRule.waitForIdle()
+        composeTestRule.waitForIdle()
 
-            // Click the "Notifications" icon in TopAppBar
-            composeTestRule.onNodeWithContentDescription("Notifications").performClick()
+        composeTestRule.onNodeWithContentDescription("Notifications").performClick()
 
-            composeTestRule.waitForIdle()
+        composeTestRule.waitForIdle()
 
-            // 9. Verify actual NotificationScreen UI content backed by Room
-            composeTestRule.onNodeWithText("Notifications").assertIsDisplayed()
-            composeTestRule.onNodeWithText("Hades II").assertIsDisplayed()
-            composeTestRule.onNodeWithText("₹1000").assertIsDisplayed()
-            composeTestRule.onNodeWithText("₹700").assertIsDisplayed()
-        }
-    }
-
-    // =====================================================================
-    // USER SETTINGS INTEGRATION TESTS
-    // =====================================================================
-
-    @Test
-    fun notificationsDisabledWorkerSucceedsWithoutCallingBackendOrPostingNotifications() {
-        runBlocking {
-            settingsRepository.setNotificationsEnabled(false)
-
-            val wishlistItem = UserInteractionEntity(
-                gameId = "integration_test_hades",
-                title = "Hades II",
-                thumbnail = null,
-                currentPrice = 1000.0,
-                originalPrice = 1200.0,
-                storeId = "steam",
-                isFavorite = true,
-                latestSyncedPrice = 1000.0
-            )
-            database.userInteractionDao().insertInteraction(wishlistItem)
-
-            val worker = PriceSyncWorker(
-                context,
-                workerParams,
-                database,
-                api,
-                settingsRepository,
-                realPriceNotificationManager,
-                Dispatchers.IO
-            )
-
-            val result = worker.doWork()
-
-            assertThat(result).isEqualTo(ListenableWorker.Result.success())
-
-            // Backend NOT called
-            coVerify(exactly = 0) { api.getWishlistPrices() }
-
-            // No NotificationEntity created in Room
-            val notifications = database.notificationDao().getAllNotifications().first()
-            assertThat(notifications).isEmpty()
-        }
+        composeTestRule.onNodeWithText("Notifications").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Hades II").assertIsDisplayed()
+        composeTestRule.onNodeWithText("₹1000").assertIsDisplayed()
+        composeTestRule.onNodeWithText("₹700").assertIsDisplayed()
     }
 
     @Test
-    fun thresholdRespectedNoNotificationBelowThresholdAndNotificationAboveThreshold() {
-        runBlocking {
-            settingsRepository.setNotificationsEnabled(true)
-            settingsRepository.setNotifyThreshold(10) // 10% threshold
+    fun notificationsDisabledWorkerSucceedsWithoutCallingBackendOrPostingNotifications() = runBlocking {
+        settingsRepository.setNotificationsEnabled(false)
 
-            val wishlistItem = UserInteractionEntity(
-                gameId = "integration_test_hades",
-                title = "Hades II",
-                thumbnail = null,
-                currentPrice = 1000.0,
-                originalPrice = 1200.0,
-                storeId = "steam",
-                isFavorite = true,
-                latestSyncedPrice = 1000.0
-            )
-            database.userInteractionDao().insertInteraction(wishlistItem)
+        val wishlistItem = UserInteractionEntity(
+            gameId = "integration_test_hades",
+            title = "Hades II",
+            thumbnail = null,
+            currentPrice = 1000.0,
+            originalPrice = 1200.0,
+            storeId = "steam",
+            isFavorite = true,
+            latestSyncedPrice = 1000.0
+        )
+        database.userInteractionDao().insertInteraction(wishlistItem)
 
-            val worker = PriceSyncWorker(
-                context,
-                workerParams,
-                database,
-                api,
-                settingsRepository,
-                realPriceNotificationManager,
-                Dispatchers.IO
-            )
+        val worker = PriceSyncWorker(
+            context,
+            workerParams,
+            database,
+            api,
+            settingsRepository,
+            realPriceNotificationManager,
+            Dispatchers.IO
+        )
 
-            // SYNC 1: ₹1000 -> ₹950 (5% drop < 10% threshold)
-            coEvery { api.getWishlistPrices() } returns Response.success(
-                mapOf("integration_test_hades" to """{"current":950.0,"original":1200.0}""")
-            )
+        val result = worker.doWork()
 
-            val result1 = worker.doWork()
-            assertThat(result1).isEqualTo(ListenableWorker.Result.success())
+        assertThat(result).isEqualTo(ListenableWorker.Result.success())
+        coVerify(exactly = 0) { api.getWishlistPrices() }
 
-            // No notification in Room for Sync 1
-            var notifications = database.notificationDao().getAllNotifications().first()
-            assertThat(notifications).isEmpty()
+        val notifications = database.notificationDao().getAllNotifications().first()
+        assertThat(notifications).isEmpty()
+    }
 
-            // Baseline updated to 950.0
-            val updatedItem = database.userInteractionDao().getInteractionForGame("integration_test_hades")
-            assertThat(updatedItem?.latestSyncedPrice).isEqualTo(950.0)
+    @Test
+    fun thresholdRespectedNoNotificationBelowThresholdAndNotificationAboveThreshold() = runBlocking {
+        settingsRepository.setNotificationsEnabled(true)
+        settingsRepository.setNotifyThreshold(10)
 
-            // SYNC 2: ₹950 -> ₹800 (15.7% drop > 10% threshold)
-            coEvery { api.getWishlistPrices() } returns Response.success(
-                mapOf("integration_test_hades" to """{"current":800.0,"original":1200.0}""")
-            )
+        val wishlistItem = UserInteractionEntity(
+            gameId = "integration_test_hades",
+            title = "Hades II",
+            thumbnail = null,
+            currentPrice = 1000.0,
+            originalPrice = 1200.0,
+            storeId = "steam",
+            isFavorite = true,
+            latestSyncedPrice = 1000.0
+        )
+        database.userInteractionDao().insertInteraction(wishlistItem)
 
-            val result2 = worker.doWork()
-            assertThat(result2).isEqualTo(ListenableWorker.Result.success())
+        val worker = PriceSyncWorker(
+            context,
+            workerParams,
+            database,
+            api,
+            settingsRepository,
+            realPriceNotificationManager,
+            Dispatchers.IO
+        )
 
-            // Notification created in Room for Sync 2
-            notifications = database.notificationDao().getAllNotifications().first()
-            assertThat(notifications).hasSize(1)
-            assertThat(notifications[0].oldPrice).isEqualTo(950.0)
-            assertThat(notifications[0].newPrice).isEqualTo(800.0)
-        }
+        coEvery { api.getWishlistPrices() } returns Response.success(
+            mapOf("integration_test_hades" to """{"current":950.0,"original":1200.0}""")
+        )
+
+        val result1 = worker.doWork()
+        assertThat(result1).isEqualTo(ListenableWorker.Result.success())
+
+        var notifications = database.notificationDao().getAllNotifications().first()
+        assertThat(notifications).isEmpty()
+
+        val updatedItem = database.userInteractionDao().getInteractionForGame("integration_test_hades")
+        assertThat(updatedItem?.latestSyncedPrice).isEqualTo(950.0)
+
+        coEvery { api.getWishlistPrices() } returns Response.success(
+            mapOf("integration_test_hades" to """{"current":800.0,"original":1200.0}""")
+        )
+
+        val result2 = worker.doWork()
+        assertThat(result2).isEqualTo(ListenableWorker.Result.success())
+
+        notifications = database.notificationDao().getAllNotifications().first()
+        assertThat(notifications).hasSize(1)
+        assertThat(notifications[0].oldPrice).isEqualTo(950.0)
+        assertThat(notifications[0].newPrice).isEqualTo(800.0)
     }
 }

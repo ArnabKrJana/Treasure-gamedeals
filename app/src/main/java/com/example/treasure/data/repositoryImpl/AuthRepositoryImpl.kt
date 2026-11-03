@@ -17,51 +17,69 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+/**
+ * Concrete implementation of [AuthRepository] mediating user authentication with the backend service.
+ *
+ * Coordinates Google OAuth verification via [TreasureBackendApi], securely persists token pairs in [TokenManager],
+ * restores the authenticated user's remote cloud wishlist into local Room persistence upon login, and executes
+ * total local data purges (clearing Room tables and cancelling WorkManager jobs) upon logout or account deletion.
+ *
+ * @param treasureBackendApi Retrofit REST client for backend authentication and wishlist queries.
+ * @param tokenManager Centralized session token and user profile preference store.
+ * @param db Central [TreasureDatabase] instance providing local table access.
+ * @param ioDispatcher Injected [CoroutineDispatcher] providing thread pool isolation for I/O operations.
+ * @param context Application context used to cancel scheduled background [WorkManager] tasks.
+ */
 class AuthRepositoryImpl @Inject constructor(
     private val treasureBackendApi: TreasureBackendApi,
     private val tokenManager: TokenManager,
     private val db: TreasureDatabase,
     private val ioDispatcher: CoroutineDispatcher,
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : AuthRepository {
 
+    companion object {
+        private const val TAG = "AuthRepo"
+        private const val PROVIDER_GOOGLE = "google"
+    }
+
+    /**
+     * Authenticates the user with the backend using a Google ID token.
+     *
+     * Saves received access and refresh tokens, maps and stores user profile details, and restores
+     * the cloud wishlist into [UserInteractionEntity] records to prime offline access.
+     *
+     * @param idToken The Google OAuth ID token string.
+     * @return [Result.success] containing the authenticated [User], or [Result.failure] on error.
+     */
     override suspend fun loginWithGoogle(idToken: String): Result<User> =
         withContext(ioDispatcher) {
             try {
                 val request = GoogleLoginRequest(idToken = idToken)
-                val response = treasureBackendApi.login("google", request)
+                val response = treasureBackendApi.login(PROVIDER_GOOGLE, request)
 
                 if (response.isSuccessful && response.body() != null) {
                     val authResponse = response.body()!!
 
-                    // 1. Securely save the tokens
                     tokenManager.saveTokens(
                         accessToken = authResponse.accessToken,
                         refreshToken = authResponse.refreshToken
                     )
 
-                    // 2. Map backend DTO to Android UI Model
                     val domainUser = authResponse.user.toDomainModel()
-
-                    // 3. Save the serialized user data locally
                     tokenManager.saveUser(domainUser)
 
-                    // RESTORE THE WISHLIST FROM SPRING BOOT!
                     try {
-                        // 1. We MUST call the detailed endpoint to satisfy the non-nullable Room Entity
                         val wishlistResponse = treasureBackendApi.getDetailedWishlist()
 
                         if (wishlistResponse.isSuccessful) {
                             val savedGames = wishlistResponse.body() ?: emptyList()
 
                             savedGames.forEach { gameDto ->
-                                // Use your DTO's actual ID variable (e.g., gameDto.id or gameDto.gameId)
                                 val targetGameId = gameDto.id
-
                                 val existingInteraction =
                                     db.userInteractionDao().getInteractionForGame(targetGameId)
 
-                                // 2. If it exists, flip 'isFavorite' to true. If not, create a new snapshot entity!
                                 val updatedEntity = existingInteraction?.copy(isFavorite = true)
                                     ?: UserInteractionEntity(
                                         gameId = targetGameId,
@@ -77,90 +95,95 @@ class AuthRepositoryImpl @Inject constructor(
                                         lastSyncTimestamp = System.currentTimeMillis()
                                     )
 
-                                // 3. Save it to Room
                                 db.userInteractionDao().insertInteraction(updatedEntity)
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e("AuthRepo", "Failed to restore wishlist on login", e)
+                        Log.e(TAG, "Failed to restore wishlist on login", e)
                     }
                     Result.success(domainUser)
                 } else {
-                    Log.e(
-                        "AuthRepo",
-                        "Login failed: ${response.code()} ${response.errorBody()?.string()}"
-                    )
+                    Log.e(TAG, "Login failed: ${response.code()} ${response.errorBody()?.string()}")
                     Result.failure(Exception("Login failed. Please try again."))
                 }
             } catch (e: Exception) {
-                Log.e("AuthRepo", "Exception during login", e)
+                Log.e(TAG, "Exception during login", e)
                 Result.failure(e)
             }
         }
 
+    /**
+     * Terminates the active user session.
+     *
+     * Notifies the backend to revoke refresh tokens, wipes local session credentials from [TokenManager],
+     * purges all tables in [TreasureDatabase], and cancels all queued [WorkManager] periodic workers.
+     *
+     * @return [Result.success] confirming completion.
+     */
     override suspend fun logout(): Result<Unit> = withContext(ioDispatcher) {
         try {
             val refreshToken = tokenManager.getRefreshToken()
             if (!refreshToken.isNullOrBlank()) {
                 val request = RefreshTokenRequest(refreshToken)
-                // Attempt to notify the backend to invalidate the session/token
                 treasureBackendApi.logout(request)
             }
         } catch (e: Exception) {
-            Log.e(
-                "AuthRepo",
-                "Error notifying backend of logout, proceeding to clear local session",
-                e
-            )
+            Log.e(TAG, "Error notifying backend of logout, proceeding to clear local session", e)
         } finally {
-            // ALWAYS clear the local session regardless of network success
             tokenManager.clearSession()
 
-            //  Wipe local database and stop background syncs!
             try {
                 db.clearAllTables()
                 WorkManager.getInstance(context).cancelAllWork()
             } catch (e: Exception) {
-                Log.e("AuthRepo", "Error wiping local database on logout", e)
+                Log.e(TAG, "Error wiping local database on logout", e)
             }
         }
         Result.success(Unit)
     }
 
+    /**
+     * Permanently deletes the authenticated user's account and personal records on the backend server.
+     *
+     * Wipes local session preferences, clears database tables, and stops background workers upon confirmation.
+     *
+     * @return [Result.success] upon server confirmation, or [Result.failure] on error.
+     */
     override suspend fun deleteAccount(): Result<Unit> = withContext(ioDispatcher) {
         try {
             val response = treasureBackendApi.deleteMyAccount()
             if (response.isSuccessful) {
                 tokenManager.clearSession()
 
-                //  Wipe data here as well so the deleted user's data doesn't linger!
                 try {
                     db.clearAllTables()
                     WorkManager.getInstance(context).cancelAllWork()
                 } catch (e: Exception) {
-                    Log.e("AuthRepo", "Error wiping local database on account deletion", e)
+                    Log.e(TAG, "Error wiping local database on account deletion", e)
                 }
 
                 Result.success(Unit)
             } else {
-                Log.e("AuthRepo", "Account deletion failed: ${response.code()}")
+                Log.e(TAG, "Account deletion failed: ${response.code()}")
                 Result.failure(Exception("Failed to delete account. Please contact support."))
             }
         } catch (e: Exception) {
-            Log.e("AuthRepo", "Exception during account deletion", e)
+            Log.e(TAG, "Exception during account deletion", e)
             Result.failure(e)
         }
     }
 
-    // --- MAPPERS ---
-
+    /**
+     * Transforms remote [UserDto] received from the backend into a domain [User] entity.
+     *
+     * @return Domain [User] model representation.
+     */
     private fun UserDto.toDomainModel(): User {
         return User(
             id = this.id,
             email = this.email,
             fullName = this.fullName,
             profilePicture = this.profilePicture,
-            // Maps the Spring Boot enum to a string for the UI
             role = this.role.name
         )
     }

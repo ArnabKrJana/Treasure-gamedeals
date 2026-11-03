@@ -13,7 +13,14 @@ import com.example.treasure.data.remote.apiService.TreasureBackendApi
 import com.example.treasure.data.repositoryImpl.SettingsRepository
 import com.example.treasure.utils.PriceNotificationManager
 import com.google.common.truth.Truth.assertThat
-import io.mockk.*
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.slot
+import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
@@ -26,6 +33,9 @@ import org.junit.Before
 import org.junit.Test
 import retrofit2.Response
 
+/**
+ * Unit tests verifying [PriceSyncWorker] background sync logic, threshold calculations, and notification dispatching.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PriceSyncWorkerTest {
 
@@ -85,7 +95,6 @@ class PriceSyncWorkerTest {
         Dispatchers.resetMain()
     }
 
-    // 1. notifications disabled
     @Test
     fun `doWork returns success when notifications are disabled`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(false)
@@ -97,7 +106,6 @@ class PriceSyncWorkerTest {
         verify(exactly = 0) { userInteractionDao.getFavorites() }
     }
 
-    // 2. empty local wishlist
     @Test
     fun `doWork returns success when wishlist is empty`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -110,7 +118,6 @@ class PriceSyncWorkerTest {
         coVerify(exactly = 0) { api.getWishlistPrices() }
     }
 
-    // 3. backend 5xx error
     @Test
     fun `doWork returns retry on 5xx server error`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -123,7 +130,6 @@ class PriceSyncWorkerTest {
         assertThat(result).isEqualTo(ListenableWorker.Result.retry())
     }
 
-    // 4. backend 429 error
     @Test
     fun `doWork returns retry on 429 rate limit error`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -136,7 +142,6 @@ class PriceSyncWorkerTest {
         assertThat(result).isEqualTo(ListenableWorker.Result.retry())
     }
 
-    // 5. backend non-retryable HTTP error
     @Test
     fun `doWork returns failure on 400 client error`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -149,7 +154,6 @@ class PriceSyncWorkerTest {
         assertThat(result).isEqualTo(ListenableWorker.Result.failure())
     }
 
-    // 6. malformed price JSON
     @Test
     fun `malformed price json for one game does not crash worker and processes valid games`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -169,7 +173,6 @@ class PriceSyncWorkerTest {
         val result = worker.doWork()
 
         assertThat(result).isEqualTo(ListenableWorker.Result.success())
-        // game2 should still be processed and updated
         verify {
             userInteractionDao.insertInteraction(match { it.gameId == "game2" && it.latestSyncedPrice == 90.0 })
         }
@@ -178,7 +181,6 @@ class PriceSyncWorkerTest {
         }
     }
 
-    // 7. game missing from backend price map
     @Test
     fun `game missing from backend price map is skipped safely`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -197,7 +199,6 @@ class PriceSyncWorkerTest {
         verify(exactly = 0) { priceNotificationManager.showSingleGameNotification(any()) }
     }
 
-    // 8. first synchronization
     @Test
     fun `first sync establishes baseline without notification`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -220,7 +221,6 @@ class PriceSyncWorkerTest {
         verify(exactly = 0) { priceNotificationManager.showSingleGameNotification(any()) }
     }
 
-    // 9. price change below threshold
     @Test
     fun `price change below threshold updates baseline without notification`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -229,7 +229,6 @@ class PriceSyncWorkerTest {
         val localItem = createLocalItem("game1", latestSyncedPrice = 100.0)
         every { userInteractionDao.getFavorites() } returns flowOf(listOf(localItem))
 
-        // 2% drop (< 10% threshold)
         coEvery { api.getWishlistPrices() } returns Response.success(
             mapOf("game1" to """{"current":98.0,"original":100.0}""")
         )
@@ -244,7 +243,6 @@ class PriceSyncWorkerTest {
         verify(exactly = 0) { priceNotificationManager.showSingleGameNotification(any()) }
     }
 
-    // 10. price drop above threshold
     @Test
     fun `price drop above threshold updates baseline and sends notification`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -253,7 +251,6 @@ class PriceSyncWorkerTest {
         val localItem = createLocalItem("game1", title = "Cool Game", latestSyncedPrice = 100.0)
         every { userInteractionDao.getFavorites() } returns flowOf(listOf(localItem))
 
-        // 10% drop (> 3% threshold)
         coEvery { api.getWishlistPrices() } returns Response.success(
             mapOf("game1" to """{"current":90.0,"original":100.0}""")
         )
@@ -274,7 +271,6 @@ class PriceSyncWorkerTest {
         }
     }
 
-    // 11. price increase above threshold
     @Test
     fun `price increase above threshold also triggers notification`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -283,7 +279,6 @@ class PriceSyncWorkerTest {
         val localItem = createLocalItem("game1", latestSyncedPrice = 100.0)
         every { userInteractionDao.getFavorites() } returns flowOf(listOf(localItem))
 
-        // 10% increase (> 3% threshold)
         coEvery { api.getWishlistPrices() } returns Response.success(
             mapOf("game1" to """{"current":110.0,"original":100.0}""")
         )
@@ -304,7 +299,6 @@ class PriceSyncWorkerTest {
         }
     }
 
-    // 12. price change exactly equal to threshold
     @Test
     fun `price change exactly equal to threshold triggers notification`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -313,7 +307,6 @@ class PriceSyncWorkerTest {
         val localItem = createLocalItem("game1", latestSyncedPrice = 100.0)
         every { userInteractionDao.getFavorites() } returns flowOf(listOf(localItem))
 
-        // Exactly 10% drop
         coEvery { api.getWishlistPrices() } returns Response.success(
             mapOf("game1" to """{"current":90.0,"original":100.0}""")
         )
@@ -329,7 +322,6 @@ class PriceSyncWorkerTest {
         }
     }
 
-    // 13. multiple games above threshold
     @Test
     fun `multiple games above threshold create multiple notification records and batch notification`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -354,7 +346,6 @@ class PriceSyncWorkerTest {
         verify { priceNotificationManager.showBatchedNotification(match { it.size == 2 }) }
     }
 
-    // 14. zero/invalid previous price
     @Test
     fun `zero previous price establishes baseline without notification`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)
@@ -377,7 +368,6 @@ class PriceSyncWorkerTest {
         verify(exactly = 0) { priceNotificationManager.showSingleGameNotification(any()) }
     }
 
-    // 15. unchanged price
     @Test
     fun `unchanged price does not create notification or unnecessary update`() = runTest(testDispatcher) {
         every { settingsRepository.areNotificationsEnabled } returns flowOf(true)

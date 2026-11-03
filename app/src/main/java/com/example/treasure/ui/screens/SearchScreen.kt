@@ -59,6 +59,14 @@ import com.example.treasure.ui.theme.LocalThemeIsDark
 import com.example.treasure.ui.viewModels.SearchViewModel
 import com.example.treasure.utils.ColorCode
 
+/**
+ * Stateful Composable screen managing catalog searches, query state updates, and result rendering.
+ *
+ * @param modifier Layout modifier applied to the search screen container.
+ * @param onBackClick Invoked when back navigation is requested.
+ * @param onItemClick Invoked when a game search result card is selected, passing its unique game ID.
+ * @param viewModel Injected [SearchViewModel] coordinating search inputs and results.
+ */
 @Composable
 fun SearchScreen(
     modifier: Modifier = Modifier,
@@ -75,13 +83,26 @@ fun SearchScreen(
         searchResults = searchResults,
         isSearching = isSearching,
         onQueryChange = { viewModel.onQueryChange(it) },
-        onSearchTriggered = { viewModel.performSearch() }, // 1. Pass the search trigger down
+        onSearchTriggered = { viewModel.performSearch() },
         onBackClick = onBackClick,
         onItemClick = onItemClick,
         modifier = modifier
     )
 }
 
+/**
+ * Stateless UI content container rendering the search bar, category suggestions, progress indicator,
+ * and 2-column grid of game search results.
+ *
+ * @param searchQuery Current search text entered by the user.
+ * @param searchResults List of matched [GameCardItem] records.
+ * @param isSearching True if an asynchronous query is actively in flight.
+ * @param onQueryChange Invoked when query text is typed.
+ * @param onSearchTriggered Invoked when search is explicitly executed (enter key or search icon).
+ * @param onBackClick Invoked to exit the search screen.
+ * @param onItemClick Invoked when a search result card is clicked.
+ * @param modifier Layout modifier applied to the parent scaffold.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreenContent(
@@ -89,7 +110,7 @@ fun SearchScreenContent(
     searchResults: List<GameCardItem>,
     isSearching: Boolean,
     onQueryChange: (String) -> Unit,
-    onSearchTriggered: () -> Unit, // 2. Receive the trigger
+    onSearchTriggered: () -> Unit,
     onBackClick: () -> Unit,
     onItemClick: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -105,7 +126,7 @@ fun SearchScreenContent(
                 onQueryChange = onQueryChange,
                 onSearch = {
                     active = false
-                    onSearchTriggered() // 3. Fire when Keyboard "Enter/Search" is pressed
+                    onSearchTriggered()
                 },
                 active = active,
                 onActiveChange = { active = it },
@@ -123,14 +144,12 @@ fun SearchScreenContent(
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
                         Row {
-                            // 4. Fire when the visual Search icon is clicked
                             IconButton(onClick = {
                                 active = false
                                 onSearchTriggered()
                             }) {
                                 Icon(imageVector = Icons.Default.Search, contentDescription = "Search")
                             }
-                            // Clear button
                             IconButton(onClick = { onQueryChange("") }) {
                                 Icon(imageVector = Icons.Default.Close, contentDescription = "Clear")
                             }
@@ -154,7 +173,7 @@ fun SearchScreenContent(
                             .clickable {
                                 onQueryChange("Action")
                                 active = false
-                                onSearchTriggered() // 5. Fire when suggestion is clicked
+                                onSearchTriggered()
                             }
                     )
                     Text(
@@ -164,7 +183,7 @@ fun SearchScreenContent(
                             .clickable {
                                 onQueryChange("RPG")
                                 active = false
-                                onSearchTriggered() // 5. Fire when suggestion is clicked
+                                onSearchTriggered()
                             }
                     )
                 }
@@ -199,6 +218,14 @@ fun SearchScreenContent(
     }
 }
 
+/**
+ * Visual card displaying an individual search result, featuring background thumbnail,
+ * dark gradient scrim overlay, title, genre, and pricing information.
+ *
+ * @param game The [GameCardItem] record to display.
+ * @param onClick Invoked when the card is clicked.
+ * @param modifier Layout modifier applied to the card.
+ */
 @Composable
 fun SearchGameCard(
     game: GameCardItem,
@@ -220,7 +247,6 @@ fun SearchGameCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-
             if (game.thumbnail != null) {
                 AsyncImage(
                     model = game.thumbnail,
@@ -253,7 +279,7 @@ fun SearchGameCard(
                     .align(Alignment.BottomCenter)
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color.Transparent,Color.Black.copy(0.7f), Color.Black)
+                            colors = listOf(Color.Transparent, Color.Black.copy(0.7f), Color.Black)
                         )
                     )
             )
@@ -267,7 +293,7 @@ fun SearchGameCard(
             ) {
                 Text(
                     text = game.title,
-                    color =Color.White,
+                    color = Color.White,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -288,7 +314,7 @@ fun SearchGameCard(
                         text = "₹${it.currentPrice.toInt()}",
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
-                        color = if(!isDark) Color(0xff00B7B5) else Color(0xFF00FF00)
+                        color = if (!isDark) Color(0xff00B7B5) else Color(0xFF00FF00)
                     )
                 }
             }
@@ -296,6 +322,9 @@ fun SearchGameCard(
     }
 }
 
+/**
+ * Preview Composable for [SearchScreenContent].
+ */
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun SearchScreenPreview() {
@@ -310,6 +339,9 @@ fun SearchScreenPreview() {
     )
 }
 
+/**
+ * Preview Composable for [SearchGameCard].
+ */
 @Preview(showBackground = true)
 @Composable
 fun SearchGameCardPreview() {

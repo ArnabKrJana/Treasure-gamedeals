@@ -2,9 +2,22 @@ package com.example.treasure.ui.uiComponents
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,8 +36,21 @@ import com.example.treasure.domain.uiModels.RequirementType
 import com.example.treasure.domain.uiModels.StoreDeal
 import com.example.treasure.ui.theme.TreasureTheme
 import java.util.Locale
-import androidx.core.net.toUri
 
+/**
+ * Renders the hardware and software specification requirements for a game, along with secondary
+ * store purchase CTA buttons.
+ *
+ * Requirements are categorized into [RequirementType.MINIMUM] and [RequirementType.MAXIMUM] (recommended)
+ * specs, formatted into distinct specification groups.
+ *
+ * @param modifier The layout modifier applied to the parent column container.
+ * @param currentStore The display name of the primary vendor/storefront (e.g., "Steam").
+ * @param currentPrice The pricing information for the primary store listing.
+ * @param dealUrl The external deep link for the primary store listing (if applicable).
+ * @param otherStores Collection of alternative store listings and active deal links.
+ * @param systemRequirements Collection of hardware/software requirements persisted in Room.
+ */
 @Composable
 fun SystemRequirementsSection(
     modifier: Modifier = Modifier,
@@ -41,22 +67,6 @@ fun SystemRequirementsSection(
             .fillMaxWidth()
             .padding(vertical = 16.dp)
     ) {
-        // Primary Store Button - Only show if URL is present
-//        if (!dealUrl.isNullOrBlank()) {
-//            BuyButton(
-//                storeName = currentStore,
-//                price = currentPrice,
-//                onClick = {
-//                    val intent = Intent(Intent.ACTION_VIEW, dealUrl.toUri())
-//                    context.startActivity(intent)
-//                }
-//            )
-//            if (otherStores.any { !it.dealUrl.isNullOrBlank() }) {
-//                Spacer(modifier = Modifier.height(12.dp))
-//            }
-//        }
-
-        // Other Stores Buttons - Filter those with valid links
         otherStores.filter { !it.dealUrl.isNullOrBlank() }.forEachIndexed { index, storeDeal ->
             BuyButton(
                 storeName = storeDeal.storeName,
@@ -82,7 +92,6 @@ fun SystemRequirementsSection(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // --- DYNAMIC REQUIREMENTS RENDERING ---
         val minSpecs = systemRequirements?.filter { it.type == RequirementType.MINIMUM } ?: emptyList()
         val recSpecs = systemRequirements?.filter { it.type == RequirementType.MAXIMUM } ?: emptyList()
 
@@ -94,7 +103,6 @@ fun SystemRequirementsSection(
                 modifier = Modifier.padding(top = 8.dp)
             )
         } else {
-            // Minimum
             if (minSpecs.isNotEmpty()) {
                 RequirementGroup(
                     title = stringResource(R.string.minimum),
@@ -103,7 +111,6 @@ fun SystemRequirementsSection(
                 )
             }
 
-            // Recommended
             if (recSpecs.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(24.dp))
                 RequirementGroup(
@@ -116,6 +123,14 @@ fun SystemRequirementsSection(
     }
 }
 
+/**
+ * Call-to-action button allowing the user to open an external store listing in the browser or vendor app.
+ *
+ * @param storeName Name of the storefront (e.g., "Steam", "GOG", "Epic Games").
+ * @param price Pricing object containing base and current discount pricing.
+ * @param onClick Invoked when the CTA button is tapped.
+ * @param modifier The layout modifier applied to the button.
+ */
 @Composable
 fun BuyButton(
     storeName: String,
@@ -155,12 +170,20 @@ fun BuyButton(
                 text = "₹${String.format(Locale.ROOT, "%.2f", price.currentPrice)}",
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 17.sp,
-                color = Color(0xFF4CAF50) // Material Green 500 for better visibility/contrast
+                color = Color(0xFF4CAF50)
             )
         }
     }
 }
 
+/**
+ * Renders a labeled section containing a sequence of system specification items (e.g., "Minimum" or "Recommended").
+ *
+ * @param title Header title of the requirement group.
+ * @param titleColor Text color used for the group header title.
+ * @param requirements The list of [SystemRequirementEntity] specifications belonging to this group.
+ * @param modifier The layout modifier applied to the container.
+ */
 @Composable
 fun RequirementGroup(
     title: String,
@@ -183,6 +206,13 @@ fun RequirementGroup(
     }
 }
 
+/**
+ * Key-value specification row displaying an individual hardware or software constraint.
+ *
+ * @param label The specification name (e.g., "OS", "Processor", "Memory").
+ * @param value The specification value (e.g., "Windows 11 64-bit", "16 GB RAM").
+ * @param modifier The layout modifier applied to the row.
+ */
 @Composable
 fun RequirementItem(
     label: String,
@@ -207,6 +237,9 @@ fun RequirementItem(
     }
 }
 
+/**
+ * Preview Composable illustrating the rendering of [SystemRequirementsSection] in light and dark modes.
+ */
 @Preview(showBackground = true)
 @Composable
 fun SystemRequirementsPreview() {

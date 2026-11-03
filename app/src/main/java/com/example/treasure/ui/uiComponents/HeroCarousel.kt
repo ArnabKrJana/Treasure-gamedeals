@@ -2,9 +2,26 @@ package com.example.treasure.ui.uiComponents
 
 import android.annotation.SuppressLint
 import android.content.res.Configuration
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -14,7 +31,13 @@ import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,25 +53,39 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.treasure.ui.theme.TreasureTheme
 import coil3.compose.AsyncImagePainter
 import coil3.compose.SubcomposeAsyncImage
 import coil3.compose.SubcomposeAsyncImageContent
 import com.example.treasure.domain.uiModels.GameCardItem
 import com.example.treasure.domain.uiModels.Price
 import com.example.treasure.domain.uiModels.UpVotes
+import com.example.treasure.ui.theme.TreasureTheme
 import com.example.treasure.utils.ColorCode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.absoluteValue
 
+/**
+ * Full-width hero carousel composable showcasing highly anticipated upcoming video game titles.
+ *
+ * Implements:
+ * - [HorizontalPager] with page offset-driven alpha fading (`graphicsLayer`).
+ * - Animated page indicator dots with dynamic pill width transitions.
+ * - Skeleton shimmer fallback ([HeroSkeletonShimmer]) while data is loading.
+ *
+ * @param games List of [GameCardItem] titles to display in the carousel.
+ * @param favoriteIds Set of favorited game IDs for O(1) membership checks.
+ * @param onToggleFavorite Callback invoked when toggling favorite state on a carousel title.
+ * @param onGameClick Callback invoked when selecting a carousel title to open details.
+ * @param modifier Composable modifier for carousel container.
+ */
 @SuppressLint("FrequentlyChangingValue")
 @Composable
 fun TreasureUpcomingCarousel(
     games: List<GameCardItem>,
-    favoriteIds: Set<String>, // FIX: Added favorite IDs state
-    onToggleFavorite: (GameCardItem) -> Unit, // FIX: Added Toggle action
+    favoriteIds: Set<String>,
+    onToggleFavorite: (GameCardItem) -> Unit,
     onGameClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -70,7 +107,6 @@ fun TreasureUpcomingCarousel(
             pageSpacing = 0.dp,
             modifier = Modifier.fillMaxSize()
         ) { page ->
-
             val pageOffset =
                 ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction).absoluteValue
             val currentGame = games[page]
@@ -84,8 +120,8 @@ fun TreasureUpcomingCarousel(
             ) {
                 UpcomingCarouselItem(
                     game = currentGame,
-                    isFavorite = currentGame.id in favoriteIds, // Check if favorited
-                    onToggleFavorite = onToggleFavorite, // Pass action
+                    isFavorite = currentGame.id in favoriteIds,
+                    onToggleFavorite = onToggleFavorite,
                     onGameClick = onGameClick
                 )
             }
@@ -116,17 +152,24 @@ fun TreasureUpcomingCarousel(
     }
 }
 
+/**
+ * Individual page slide composable within [TreasureUpcomingCarousel].
+ *
+ * @param game The [GameCardItem] title data.
+ * @param isFavorite `true` if the title is marked as a user favorite.
+ * @param onToggleFavorite Callback invoked when toggling favorite state.
+ * @param onGameClick Callback invoked when tapping "Know More".
+ */
 @Composable
 fun UpcomingCarouselItem(
     game: GameCardItem,
-    isFavorite: Boolean, // Added state
-    onToggleFavorite: (GameCardItem) -> Unit, // Added toggle
+    isFavorite: Boolean,
+    onToggleFavorite: (GameCardItem) -> Unit,
     onGameClick: (String) -> Unit
 ) {
     val bgColor = MaterialTheme.colorScheme.background
 
     Box(modifier = Modifier.fillMaxSize()) {
-
         SubcomposeAsyncImage(
             model = game.thumbnail,
             contentDescription = game.title,
@@ -150,7 +193,6 @@ fun UpcomingCarouselItem(
                         )
                     }
                 }
-
                 else -> SubcomposeAsyncImageContent()
             }
         }
@@ -261,7 +303,6 @@ fun UpcomingCarouselItem(
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // FIX: Configured the Wishlist Icon Button!
                 IconButton(
                     onClick = { onToggleFavorite(game) },
                     modifier = Modifier
@@ -271,7 +312,7 @@ fun UpcomingCarouselItem(
                     Icon(
                         imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "Toggle Favorite",
-                        tint = if (isFavorite) Color(0xFFFF5252) else Color.White // Turns red when favorited
+                        tint = if (isFavorite) Color(0xFFFF5252) else Color.White
                     )
                 }
             }
@@ -279,43 +320,50 @@ fun UpcomingCarouselItem(
     }
 }
 
-//@Preview
+/**
+ * Full-bleed animated skeleton shimmer placeholder rendered while carousel artwork loads.
+ */
 @Composable
 fun HeroSkeletonShimmer() {
-    // 1. Define Colors (Neutral Grays matching your app's AnimatedShimmer)
     val shimmerColors = listOf(
         Color.LightGray.copy(alpha = 0.6f),
         Color.LightGray.copy(alpha = 0.2f),
         Color.LightGray.copy(alpha = 0.6f),
     )
 
-    // 2. Setup Transition
     val transition = rememberInfiniteTransition(label = "hero_shimmer")
     val translateAnim = transition.animateFloat(
         initialValue = 0f,
-        targetValue = 1000f, // Match target value
+        targetValue = 1000f,
         animationSpec = infiniteRepeatable(
             animation = tween(
-                durationMillis = 1000, // Matched duration
-                easing = FastOutSlowInEasing // Premium swipe easing
+                durationMillis = 1000,
+                easing = FastOutSlowInEasing
             ),
             repeatMode = RepeatMode.Restart
         ),
         label = "shimmer_translate"
     )
 
-    // 3. Create the Moving Brush
     val brush = Brush.linearGradient(
         colors = shimmerColors,
         start = Offset.Zero,
         end = Offset(x = translateAnim.value, y = translateAnim.value)
     )
 
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .background(brush))
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(brush)
+    )
 }
 
+/**
+ * Formats a Unix epoch timestamp (in seconds) into human-readable release date string ("dd MMM yyyy").
+ *
+ * @param timestamp Epoch timestamp in seconds.
+ * @return Formatted release date string, or "TBA" if null or 0.
+ */
 private fun formatReleaseDate(timestamp: Long?): String {
     if (timestamp == null || timestamp == 0L) return "TBA"
     return try {
@@ -349,7 +397,7 @@ fun TreasureUpcomingCarouselPreview() {
         Surface {
             TreasureUpcomingCarousel(
                 games = dummyUpcomingGames,
-                favoriteIds = setOf("1"), // Preview state
+                favoriteIds = setOf("1"),
                 onToggleFavorite = {},
                 onGameClick = {},
                 modifier = Modifier.height(600.dp)

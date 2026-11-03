@@ -1,5 +1,3 @@
-
-
 package com.example.treasure.ui.screens
 
 import android.app.Activity
@@ -8,34 +6,67 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.TrendingDown
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.outlined.CloudDone
+import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.FormatPaint
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.treasure.data.repositoryImpl.AppTheme
+import com.example.treasure.ui.theme.TreasureTheme
 import com.example.treasure.ui.viewModels.SettingsUiState
 import com.example.treasure.ui.viewModels.SettingsViewModel
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.treasure.ui.theme.TreasureTheme
 import com.example.treasure.utils.Constants.WEB_CLIENT_ID
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.Scope
 
+/**
+ * Stateful Composable screen hosting the settings, preferences, appearance choices,
+ * background sync intervals, and Google Drive account connectivity.
+ *
+ * @param viewModel Injected [SettingsViewModel] coordinating user preferences.
+ */
 @Composable
 fun SettingScreen(
     viewModel: SettingsViewModel = hiltViewModel()
@@ -56,6 +87,20 @@ fun SettingScreen(
     )
 }
 
+/**
+ * Stateless UI container rendering categorized settings sections.
+ *
+ * @param state Consolidated [SettingsUiState] containing active user preferences.
+ * @param onThemeChange Invoked when a new theme mode is chosen.
+ * @param onDynamicColorChange Invoked when dynamic colors setting is toggled.
+ * @param onNotificationChange Invoked when notifications setting is toggled.
+ * @param onSyncFrequencyChange Invoked when background sync frequency is updated.
+ * @param onThresholdChange Invoked when price drop alert threshold is changed.
+ * @param onClearCache Invoked to evict image cache.
+ * @param onLinkDrive Invoked with Google OAuth server authorization code to link Drive.
+ * @param onUnlinkDrive Invoked to disconnect Google Drive.
+ * @param onAuthFailed Invoked when Google Drive authorization fails or is cancelled.
+ */
 @Composable
 fun SettingScreenContent(
     state: SettingsUiState,
@@ -170,7 +215,7 @@ fun SettingScreenContent(
                 title = "Version",
                 subtitle = state.version,
                 icon = Icons.Outlined.Info,
-                onClick = { /* Do nothing */ }
+                onClick = { /* Informational only */ }
             )
         }
 
@@ -230,6 +275,12 @@ fun SettingScreenContent(
     }
 }
 
+/**
+ * Builds an explicit [Intent] requesting Google Drive OAuth permissions from the Settings screen.
+ *
+ * @param context Android context used to initialize Google Sign-In client.
+ * @return Configured Google Sign-In [Intent].
+ */
 @Suppress("DEPRECATION")
 fun getDriveSyncSettingsIntent(context: Context): Intent {
     val webClientId = WEB_CLIENT_ID
@@ -241,10 +292,15 @@ fun getDriveSyncSettingsIntent(context: Context): Intent {
         .build()
 
     val client = GoogleSignIn.getClient(context, gso)
-//    client.signOut()
     return client.signInIntent
 }
 
+/**
+ * Visual card container wrapping a related group of settings items.
+ *
+ * @param title Section title header text.
+ * @param content Slot rendering children settings composables within the card.
+ */
 @Composable
 fun SettingsSectionCard(
     title: String,
@@ -269,6 +325,11 @@ fun SettingsSectionCard(
     }
 }
 
+/**
+ * Text header for a settings section.
+ *
+ * @param title Section header text.
+ */
 @Composable
 fun SettingsSectionTitle(title: String) {
     Text(
@@ -279,6 +340,14 @@ fun SettingsSectionTitle(title: String) {
     )
 }
 
+/**
+ * Clickable settings row displaying an icon, title, and descriptive subtitle value.
+ *
+ * @param title Primary title text.
+ * @param subtitle Descriptive subtitle or active selection.
+ * @param icon Leading image vector icon.
+ * @param onClick Invoked when the row is tapped.
+ */
 @Composable
 fun SettingsClickableItem(
     title: String,
@@ -310,6 +379,15 @@ fun SettingsClickableItem(
     }
 }
 
+/**
+ * Settings row equipped with a toggle switch control.
+ *
+ * @param title Primary title text.
+ * @param subtitle Descriptive subtitle explaining the setting.
+ * @param icon Leading image vector icon.
+ * @param checked Whether the toggle switch is currently active.
+ * @param onCheckedChange Callback invoked when the toggle state is flipped.
+ */
 @Composable
 fun SettingsSwitchItem(
     title: String,
@@ -343,6 +421,16 @@ fun SettingsSwitchItem(
     }
 }
 
+/**
+ * Generic single-selection dialog presenting a list of choices using radio buttons.
+ *
+ * @param title Dialog heading title.
+ * @param options List of selectable option models.
+ * @param selectedOption Currently selected option.
+ * @param onOptionSelected Invoked when a new option is chosen.
+ * @param onDismiss Invoked when the dialog is dismissed without changes.
+ * @param labelProvider Function converting an option model into a displayable string.
+ */
 @Composable
 fun <T> SelectionDialog(
     title: String,
@@ -384,6 +472,9 @@ fun <T> SelectionDialog(
     )
 }
 
+/**
+ * Preview Composable for [SettingScreenContent].
+ */
 @Preview(showBackground = true)
 @Composable
 fun SettingScreenPreview() {
